@@ -123,6 +123,14 @@ def check_accesstrade_config(config: AccesstradeConfig | None = None, *, url: st
             reasons.append("missing_ACCESSTRADE_CAMPAIGN_ID")
     return AccesstradeHealth(configured=not reasons, reasons=reasons)
 
+def build_isclix_deep_link(*, url: str, campaign_id: str, channel_id: str, utm: dict[str, str] | None = None) -> str:
+    params: dict[str, str] = {"url_enc": __import__("base64").b64encode(url.encode("utf-8")).decode("ascii")}
+    for key, value in (utm or {}).items():
+        if key.startswith("sub") and value:
+            params[key] = value
+    return f"https://go.isclix.com/deep_link/v5/{campaign_id}/{channel_id}?{urllib.parse.urlencode(params)}"
+
+
 def build_tracking_payload(*, campaign_id: str, urls: list[str], utm: dict[str, str], channel_id: str = "") -> dict[str, Any]:
     payload = {
         "campaign_id": campaign_id,
@@ -149,7 +157,8 @@ def create_tracking_link(*, url: str, utm: dict[str, str], config: AccesstradeCo
     if not health.configured:
         return AccesstradeLinkResult(ok=False, original_url=url, payload=payload, error=",".join(health.reasons), dry_run=dry_run, campaign_key=selected.key)
     if dry_run:
-        return AccesstradeLinkResult(ok=True, original_url=url, affiliate_url=url, payload=payload, dry_run=True, campaign_key=selected.key)
+        fallback_url = build_isclix_deep_link(url=url, campaign_id=selected.campaign_id, channel_id=selected.channel_id, utm=utm) if selected.campaign_id and selected.channel_id else url
+        return AccesstradeLinkResult(ok=True, original_url=url, affiliate_url=fallback_url, payload=payload, dry_run=True, campaign_key=selected.key)
 
     endpoint = f"{config.base_url.rstrip('/')}/v1/product_link/create"
     data = json.dumps(payload).encode("utf-8")
@@ -167,6 +176,8 @@ def create_tracking_link(*, url: str, utm: dict[str, str], config: AccesstradeCo
             body = resp.read().decode("utf-8", errors="replace")
             parsed = json.loads(body) if body else {}
             affiliate_url = extract_affiliate_url(parsed)
+            if not affiliate_url and selected.campaign_id and selected.channel_id and str(parsed.get("status_code")) == "03":
+                affiliate_url = build_isclix_deep_link(url=url, campaign_id=selected.campaign_id, channel_id=selected.channel_id, utm=utm)
             return AccesstradeLinkResult(ok=bool(affiliate_url), original_url=url, affiliate_url=affiliate_url, payload=payload, status=resp.status, error="" if affiliate_url else "affiliate_url_not_found", dry_run=False, campaign_key=selected.key)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
