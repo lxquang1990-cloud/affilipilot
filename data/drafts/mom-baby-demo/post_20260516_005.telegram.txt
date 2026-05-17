@@ -1,0 +1,21 @@
+🐌 AffiliPilot — post_20260516_005
+Sản phẩm: Vitamin tăng đề kháng cho bé
+Category: vitamin
+Money score: 0/100
+Compliance: block
+Risk flags: high_risk_category:vitamin, health_claim
+
+Hook:
+Một gợi ý nhỏ cho mẹ đang tìm đồ tiện dùng trong sinh hoạt hằng ngày với bé.
+
+Caption:
+Một gợi ý nhỏ cho mẹ đang tìm đồ tiện dùng trong sinh hoạt hằng ngày với bé.
+
+Mẹ có thể tham khảo Vitamin tăng đề kháng cho bé. Trước khi mua, nên kiểm tra kỹ thông tin shop, đánh giá, chất liệu và mức độ phù hợp với bé/nhà mình. Giá tham khảo khoảng 199.000đ, có thể thay đổi theo thời điểm.
+
+Nếu thấy hợp nhu cầu, mẹ xem chi tiết ở link nhé.
+
+Bài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ mà không làm thay đổi giá mua của bạn.
+#tiepthilienket #ShopeeAffiliate
+
+Buttons: ✅ Approve / ❌ Reject / ✏️ Edit / 🚫 Blacklist

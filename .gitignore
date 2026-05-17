@@ -1,0 +1,28 @@
+.env
+*.env
+*.local
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Runtime data / generated artifacts
+data/**/*.db
+data/**/*.sqlite
+data/outbox/*.json
+data/runs/
+data/bridge-smoke/
+data/smoke-happy-path/
+data/demo-happy-path/
+data/_archive/
+logs/
+
+# Backups and local scratch
+backups/
+*.bak.*
+*.tmp
+.DS_Store

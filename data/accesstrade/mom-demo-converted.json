@@ -1,0 +1,121 @@
+{
+  "input_path": "examples/mom_baby_links.txt",
+  "dry_run": true,
+  "total": 2,
+  "ok_count": 2,
+  "failed_count": 0,
+  "items": [
+    {
+      "index": 1,
+      "product": {
+        "url": "https://shopee.vn/example-storage",
+        "title": "Giỏ sắp xếp đồ bé tiện gọn",
+        "category": "storage",
+        "price_vnd": 129000,
+        "commission_rate": null,
+        "image_url": "",
+        "image_path": "",
+        "video_url": "",
+        "video_path": "",
+        "affiliate_url": "https://shopee.vn/example-storage",
+        "tracking_url": "https://shopee.vn/example-storage",
+        "notes": "giúp mẹ cất khăn bỉm đồ lặt vặt gọn hơn"
+      },
+      "tracking_identity": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260517_001",
+        "product_id": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260517_001",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260517_001",
+        "sub4": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+      },
+      "result": {
+        "ok": true,
+        "original_url": "https://shopee.vn/example-storage",
+        "affiliate_url": "https://shopee.vn/example-storage",
+        "payload": {
+          "campaign_id": "your_shopee_campaign_id_here",
+          "urls": [
+            "https://shopee.vn/example-storage"
+          ],
+          "url_enc": true,
+          "utm_source": "facebook",
+          "utm_medium": "page_post",
+          "utm_campaign": "affilipilot_mom_baby_202605",
+          "utm_content": "post_20260517_001",
+          "sub1": "facebook",
+          "sub2": "nangniutraingottinhyeu",
+          "sub3": "post_20260517_001",
+          "sub4": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+        },
+        "status": null,
+        "error": "",
+        "dry_run": true
+      }
+    },
+    {
+      "index": 2,
+      "product": {
+        "url": "https://shopee.vn/example-feeding",
+        "title": "Hộp chia sữa 3 ngăn",
+        "category": "feeding",
+        "price_vnd": 99000,
+        "commission_rate": null,
+        "image_url": "",
+        "image_path": "",
+        "video_url": "",
+        "video_path": "",
+        "affiliate_url": "https://shopee.vn/example-feeding",
+        "tracking_url": "https://shopee.vn/example-feeding",
+        "notes": "tiện mang theo khi ra ngoài"
+      },
+      "tracking_identity": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260517_002",
+        "product_id": "hộp-chia-sữa-3-ngăn"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260517_002",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260517_002",
+        "sub4": "hộp-chia-sữa-3-ngăn"
+      },
+      "result": {
+        "ok": true,
+        "original_url": "https://shopee.vn/example-feeding",
+        "affiliate_url": "https://shopee.vn/example-feeding",
+        "payload": {
+          "campaign_id": "your_shopee_campaign_id_here",
+          "urls": [
+            "https://shopee.vn/example-feeding"
+          ],
+          "url_enc": true,
+          "utm_source": "facebook",
+          "utm_medium": "page_post",
+          "utm_campaign": "affilipilot_mom_baby_202605",
+          "utm_content": "post_20260517_002",
+          "sub1": "facebook",
+          "sub2": "nangniutraingottinhyeu",
+          "sub3": "post_20260517_002",
+          "sub4": "hộp-chia-sữa-3-ngăn"
+        },
+        "status": null,
+        "error": "",
+        "dry_run": true
+      }
+    }
+  ]
+}

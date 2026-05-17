@@ -1,0 +1,5 @@
+https://shopee.vn/example-storage | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | notes=giúp mẹ cất khăn bỉm đồ lặt vặt gọn hơn
+https://shopee.vn/example-feeding | title=Hộp chia sữa 3 ngăn | category=feeding | price=99000 | notes=tiện mang theo khi ra ngoài
+https://shopee.vn/example-safety | title=Bọc góc bàn mềm cho bé | category=home_safety | price=45000 | notes=phụ kiện an toàn nhà cửa khi bé tập đi
+https://shopee.vn/example-toy | title=Bộ thẻ học màu sắc cho bé | category=toy | price=59000 | notes=đồ chơi giáo dục nhẹ không claim phát triển trí não
+https://shopee.vn/example-vitamin | title=Vitamin tăng đề kháng cho bé | category=vitamin | price=199000 | notes=high risk example should be blocked or ranked low

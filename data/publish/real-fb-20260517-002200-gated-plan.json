@@ -1,0 +1,68 @@
+{
+  "batch_key": "real-fb-20260517-002200",
+  "plans": [
+    {
+      "post_id": "post_20260516_001",
+      "status": "blocked",
+      "reasons": [
+        "link_not_affiliate_tracking",
+        "missing_product_media"
+      ],
+      "endpoint": "",
+      "payload_preview": {},
+      "dry_run_only": true
+    },
+    {
+      "post_id": "post_20260516_002",
+      "status": "blocked",
+      "reasons": [
+        "not_approved_by_snail",
+        "link_not_affiliate_tracking",
+        "missing_product_media"
+      ],
+      "endpoint": "",
+      "payload_preview": {},
+      "dry_run_only": true
+    },
+    {
+      "post_id": "post_20260516_003",
+      "status": "blocked",
+      "reasons": [
+        "not_approved_by_snail",
+        "link_not_affiliate_tracking",
+        "missing_product_media"
+      ],
+      "endpoint": "",
+      "payload_preview": {},
+      "dry_run_only": true
+    },
+    {
+      "post_id": "post_20260516_004",
+      "status": "blocked",
+      "reasons": [
+        "not_approved_by_snail",
+        "link_not_affiliate_tracking",
+        "missing_product_media"
+      ],
+      "endpoint": "",
+      "payload_preview": {},
+      "dry_run_only": true
+    },
+    {
+      "post_id": "post_20260516_005",
+      "status": "blocked",
+      "reasons": [
+        "not_approved_by_snail",
+        "compliance_not_pass:block",
+        "link_not_affiliate_tracking",
+        "missing_product_media"
+      ],
+      "endpoint": "",
+      "payload_preview": {},
+      "dry_run_only": true
+    }
+  ],
+  "publishable_count": 0,
+  "blocked_count": 5,
+  "dry_run_only": true
+}

@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "status": 403,
+  "response": {
+    "error": {
+      "message": "(#200) If posting to a group, requires app being installed in the group, and \\\n          either publish_to_groups permission with user token, or both pages_read_engagement \\\n          and pages_manage_posts permission with page token; If posting to a page, \\\n          requires both pages_read_engagement and pages_manage_posts as an admin with \\\n          sufficient administrative permission",
+      "type": "OAuthException",
+      "code": 200,
+      "fbtrace_id": "AXEep2kjHRVCQP6ESoGnhyA"
+    }
+  },
+  "endpoint": "/1046258415242256/feed"
+}

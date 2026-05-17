@@ -1,0 +1,143 @@
+# AffiliPilot Operations Guide
+
+AffiliPilot Lite is a local-first, approval-gated affiliate workflow for the Facebook Page `Nâng Niu Trái Ngọt Tình Yêu`.
+
+## Safety model
+
+Default behavior is safe:
+
+- no real Accesstrade API call unless `accesstrade-convert --real` is used and secrets are configured
+- no real Facebook publish unless `facebook-publish-one` is explicitly run against a publishable dry-run plan
+- no direct Telegram Bot API call from delivery commands
+- no auto-approval
+- every Facebook publish path requires approval state + compliance pass + affiliate link + media + Facebook config
+
+## Primary local workflow
+
+```bash
+cd /home/snail/.openclaw/workspace/affilipilot
+```
+
+### 1. Create drafts from links
+
+```bash
+python3 -m affilipilot draft-links \
+  --input examples/mom_baby_links.txt \
+  --work-dir data/runs/manual \
+  --db data/affilipilot.db \
+  --batch-key manual-001 \
+  --limit 5 \
+  --outbox data/outbox/manual-001.json \
+  --show-preview
+```
+
+### 2. Review local Telegram outbox
+
+```bash
+python3 -m affilipilot outbox --outbox data/outbox/manual-001.json
+```
+
+Dry-run delivery / mark processed locally:
+
+```bash
+python3 -m affilipilot deliver-telegram --outbox data/outbox/manual-001.json --limit 1
+python3 -m affilipilot deliver-telegram --outbox data/outbox/manual-001.json --limit 1 --mark-sent
+```
+
+### 3. Approve or reject posts
+
+```bash
+python3 -m affilipilot decide \
+  --db data/affilipilot.db \
+  --batch-key manual-001 \
+  --post-id post_20260516_001 \
+  --decision approved \
+  --reason "ok"
+```
+
+Allowed decisions:
+
+- `approved`
+- `rejected`
+- `needs_edit`
+- `blacklisted`
+- `pending`
+
+### 4. Build ready package and Facebook dry-run plan
+
+```bash
+FACEBOOK_PAGE_ID=page FACEBOOK_PAGE_ACCESS_TOKEN=.placeholder-token \
+python3 -m affilipilot approve-ready \
+  --db data/affilipilot.db \
+  --batch-key manual-001 \
+  --out-dir data/runs/manual/manual-001-approved
+```
+
+This does not publish. It writes:
+
+- `ready/ready_package.json`
+- `ready/<post_id>.ready-to-post.txt`
+- `facebook-plan.json`
+
+### 5. Inspect full batch status
+
+```bash
+python3 -m affilipilot batch-status \
+  --db data/affilipilot.db \
+  --batch-key manual-001 \
+  --facebook-plan data/runs/manual/manual-001-approved/facebook-plan.json
+```
+
+## Smoke test
+
+Run the deterministic happy path:
+
+```bash
+python3 -m affilipilot demo-happy-path \
+  --work-dir data/demo-happy-path \
+  --db data/demo-happy-path.db \
+  --batch-key demo-happy-path
+```
+
+Or use the script:
+
+```bash
+scripts/smoke_affilipilot.sh
+```
+
+## Verification
+
+```bash
+scripts/verify_all.sh
+```
+
+The verification suite compiles code, runs tests, scans for obvious secrets, and runs the happy-path smoke test.
+
+## Real Facebook publish policy
+
+Only run `facebook-publish-one` when all are true:
+
+1. `facebook-token-check` passes.
+2. `approve-ready` produced `publishable_dry_run` for the target post.
+3. The post was explicitly approved in the DB.
+4. The target post is harmless/test-safe or Snail explicitly approved the real publish.
+
+Example:
+
+```bash
+python3 -m affilipilot facebook-publish-one \
+  --plan data/runs/manual/manual-001-approved/facebook-plan.json \
+  --post-id post_20260516_001 \
+  --out data/publish/manual-001-post_20260516_001-result.json
+```
+
+Do not use this command in unattended automation.
+
+## First real publish checklist
+
+Before any real publish, follow [`first-real-publish-checklist.md`](first-real-publish-checklist.md).
+
+
+## OpenClaw Telegram bridge
+
+For real Telegram delivery handoff, use the plan-only bridge in [`openclaw-telegram-bridge.md`](openclaw-telegram-bridge.md). It renders `openclaw agent --deliver` commands and does not send automatically.

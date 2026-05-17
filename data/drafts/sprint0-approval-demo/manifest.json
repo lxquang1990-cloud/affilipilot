@@ -1,0 +1,52 @@
+{
+  "created_at": "2026-05-16T13:50:22.317682+00:00",
+  "input_path": "examples/products.csv",
+  "out_dir": "data/drafts/sprint0-approval-demo",
+  "total_products": 1,
+  "selected": 1,
+  "posts": [
+    {
+      "post_id": "post_20260516_001",
+      "product": {
+        "url": "https://shopee.vn/example-product",
+        "title": "Hộp chia sữa",
+        "category": "feeding",
+        "price_vnd": 99000,
+        "commission_rate": 0.08,
+        "image_url": "",
+        "notes": "Example only - replace with real product"
+      },
+      "score": 82,
+      "score_reasons": [
+        "safe_category_bonus:feeding+15",
+        "price_fit+15",
+        "commission_good+12"
+      ],
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_001",
+        "product_id": "hộp-chia-sữa"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_001",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_001",
+        "sub4": "hộp-chia-sữa"
+      },
+      "compliance": {
+        "status": "pass",
+        "risk_flags": [],
+        "required_edits": []
+      },
+      "files": {
+        "telegram_card": "data/drafts/sprint0-approval-demo/post_20260516_001.telegram.txt",
+        "post_text": "data/drafts/sprint0-approval-demo/post_20260516_001.post.txt"
+      }
+    }
+  ]
+}

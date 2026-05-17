@@ -1,0 +1,54 @@
+{
+  "batch_key": "tg-20260516-210306",
+  "facebook_verified": false,
+  "dry_run_passed": false,
+  "ready_count": 1,
+  "held_count": 0,
+  "ready": [
+    {
+      "post_id": "post_20260516_001",
+      "product": {
+        "url": "https://shopee.vn/a",
+        "title": "Giỏ sắp xếp đồ bé tiện gọn",
+        "category": "storage",
+        "price_vnd": 129000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": ""
+      },
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_001",
+        "product_id": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_001",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_001",
+        "sub4": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+      },
+      "approval": {
+        "batch_key": "tg-20260516-210306",
+        "post_id": "post_20260516_001",
+        "status": "approved",
+        "reason": "ok",
+        "decided_at": "2026-05-16 14:03:07"
+      },
+      "publish_gate": {
+        "allowed": false,
+        "reasons": [
+          "facebook_not_verified",
+          "publish_dry_run_not_passed"
+        ],
+        "fallback_required": true
+      },
+      "post_text": "Góc đồ của bé rất dễ bừa chỉ sau một buổi. Một món nhỏ nhưng giúp mẹ đỡ mất thời gian tìm đồ.\n\nMẹ có thể tham khảo Giỏ sắp xếp đồ bé tiện gọn nếu đang muốn sắp xếp bỉm, khăn, bình sữa hoặc đồ lặt vặt của bé gọn hơn. Điểm đáng chú ý là dùng cho việc tổ chức đồ trong nhà, không cần nói quá công dụng. Giá tham khảo khoảng 129.000đ, có thể thay đổi theo thời điểm.\n\nNếu thấy hợp nhu cầu, mẹ xem chi tiết ở link nhé.\n\nBài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ mà không làm thay đổi giá mua của bạn.\n#tiepthilienket #ShopeeAffiliate\n"
+    }
+  ],
+  "held": []
+}

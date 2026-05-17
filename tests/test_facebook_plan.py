@@ -1,0 +1,34 @@
+from affilipilot.publishing.facebook import FacebookConfig
+from affilipilot.publishing.facebook_plan import build_graph_payload, plan_facebook_batch, render_facebook_plan
+from affilipilot.workflows.approval import create_approval_batch, decide_post
+
+
+def test_build_graph_payload():
+    graph = build_graph_payload(page_id="page", message="hello", link="https://example.com")
+    assert graph["endpoint"] == "/page/feed"
+    assert graph["payload"]["message"] == "hello"
+    assert graph["payload"]["link"] == "https://example.com"
+
+
+def test_facebook_plan_blocks_without_approval(tmp_path):
+    input_file = tmp_path / "links.txt"
+    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000", encoding="utf-8")
+    db = tmp_path / "db.sqlite"
+    create_approval_batch(input_file, tmp_path / "drafts", db, batch_key="batch", limit=1)
+    plan = plan_facebook_batch(db, batch_key="batch", out_path=tmp_path / "plan.json", config=FacebookConfig(page_id="page", page_access_token="token"))
+    assert plan.publishable_count == 0
+    assert "not_approved_by_snail" in plan.plans[0].reasons
+
+
+def test_facebook_plan_publishable_after_approval(tmp_path):
+    input_file = tmp_path / "links.txt"
+    input_file.write_text("https://go.isclix.com/deep_link/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/product.jpg", encoding="utf-8")
+    db = tmp_path / "db.sqlite"
+    create_approval_batch(input_file, tmp_path / "drafts", db, batch_key="batch", limit=1)
+    decide_post(db, batch_key="batch", post_id="post_20260516_001", decision="approved")
+    plan = plan_facebook_batch(db, batch_key="batch", out_path=tmp_path / "plan.json", config=FacebookConfig(page_id="page", page_access_token="token"))
+    rendered = render_facebook_plan(plan)
+    assert plan.publishable_count == 1
+    assert plan.plans[0].endpoint == "/page/feed"
+    assert "would POST" in rendered
+    assert (tmp_path / "plan.json").exists()

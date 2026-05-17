@@ -1,0 +1,29 @@
+{
+  "batch_key": "fb-plan-demo",
+  "plans": [
+    {
+      "post_id": "post_20260516_001",
+      "status": "publishable_dry_run",
+      "reasons": [],
+      "endpoint": "/1046258415242256/feed",
+      "payload_preview": {
+        "message": "Góc đồ của bé rất dễ bừa chỉ sau một buổi. Một món nhỏ nhưng giúp mẹ đỡ mất thời gian tìm đồ.\n\nMẹ có thể tham khảo Giỏ sắp xếp đồ bé tiện gọn nếu đang muốn sắp xếp bỉm, khăn, bình sữa hoặc đồ lặt vặt của bé gọn hơn. Điểm đáng chú ý là dùng cho việc tổ chức đồ trong nhà, không cần nói quá công dụng. Giá tham khảo khoảng 129.000đ, có thể thay đổi theo thời điểm.\n\nNếu thấy hợp nhu cầu, mẹ xem chi tiết ở link nhé.\n\nBài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ mà không làm thay đổi giá mua của bạn.\n#tiepthilienket #ShopeeAffiliate",
+        "link": "https://shopee.vn/example-storage"
+      },
+      "dry_run_only": true
+    },
+    {
+      "post_id": "post_20260516_002",
+      "status": "blocked",
+      "reasons": [
+        "not_approved_by_snail"
+      ],
+      "endpoint": "",
+      "payload_preview": {},
+      "dry_run_only": true
+    }
+  ],
+  "publishable_count": 1,
+  "blocked_count": 1,
+  "dry_run_only": true
+}

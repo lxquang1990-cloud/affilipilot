@@ -1,0 +1,227 @@
+{
+  "created_at": "2026-05-16T14:22:50.252637+00:00",
+  "input_path": "examples/mom_baby_links.txt",
+  "out_dir": "data/drafts/mom-baby-demo",
+  "total_products": 5,
+  "selected": 5,
+  "posts": [
+    {
+      "post_id": "post_20260516_001",
+      "product": {
+        "url": "https://shopee.vn/example-storage",
+        "title": "Giỏ sắp xếp đồ bé tiện gọn",
+        "category": "storage",
+        "price_vnd": 129000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": "giúp mẹ cất khăn bỉm đồ lặt vặt gọn hơn"
+      },
+      "score": 85,
+      "score_reasons": [
+        "safe_category_bonus:storage+20",
+        "price_fit+15",
+        "content_angle+10"
+      ],
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_001",
+        "product_id": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_001",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_001",
+        "sub4": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+      },
+      "compliance": {
+        "status": "pass",
+        "risk_flags": [],
+        "required_edits": []
+      },
+      "files": {
+        "telegram_card": "data/drafts/mom-baby-demo/post_20260516_001.telegram.txt",
+        "post_text": "data/drafts/mom-baby-demo/post_20260516_001.post.txt"
+      }
+    },
+    {
+      "post_id": "post_20260516_002",
+      "product": {
+        "url": "https://shopee.vn/example-feeding",
+        "title": "Hộp chia sữa 3 ngăn",
+        "category": "feeding",
+        "price_vnd": 99000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": "tiện mang theo khi ra ngoài"
+      },
+      "score": 80,
+      "score_reasons": [
+        "safe_category_bonus:feeding+15",
+        "price_fit+15",
+        "content_angle+10"
+      ],
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_002",
+        "product_id": "hộp-chia-sữa-3-ngăn"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_002",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_002",
+        "sub4": "hộp-chia-sữa-3-ngăn"
+      },
+      "compliance": {
+        "status": "pass",
+        "risk_flags": [],
+        "required_edits": []
+      },
+      "files": {
+        "telegram_card": "data/drafts/mom-baby-demo/post_20260516_002.telegram.txt",
+        "post_text": "data/drafts/mom-baby-demo/post_20260516_002.post.txt"
+      }
+    },
+    {
+      "post_id": "post_20260516_003",
+      "product": {
+        "url": "https://shopee.vn/example-toy",
+        "title": "Bộ thẻ học màu sắc cho bé",
+        "category": "toy",
+        "price_vnd": 59000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": "đồ chơi giáo dục nhẹ không claim phát triển trí não"
+      },
+      "score": 67,
+      "score_reasons": [
+        "safe_category_bonus:toy+12",
+        "price_fit+15"
+      ],
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_003",
+        "product_id": "bộ-thẻ-học-màu-sắc-cho-bé"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_003",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_003",
+        "sub4": "bộ-thẻ-học-màu-sắc-cho-bé"
+      },
+      "compliance": {
+        "status": "pass",
+        "risk_flags": [],
+        "required_edits": []
+      },
+      "files": {
+        "telegram_card": "data/drafts/mom-baby-demo/post_20260516_003.telegram.txt",
+        "post_text": "data/drafts/mom-baby-demo/post_20260516_003.post.txt"
+      }
+    },
+    {
+      "post_id": "post_20260516_004",
+      "product": {
+        "url": "https://shopee.vn/example-safety",
+        "title": "Bọc góc bàn mềm cho bé",
+        "category": "home_safety",
+        "price_vnd": 45000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": "phụ kiện an toàn nhà cửa khi bé tập đi"
+      },
+      "score": 66,
+      "score_reasons": [
+        "safe_category_bonus:home_safety+16",
+        "content_angle+10"
+      ],
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_004",
+        "product_id": "bọc-góc-bàn-mềm-cho-bé"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_004",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_004",
+        "sub4": "bọc-góc-bàn-mềm-cho-bé"
+      },
+      "compliance": {
+        "status": "pass",
+        "risk_flags": [],
+        "required_edits": []
+      },
+      "files": {
+        "telegram_card": "data/drafts/mom-baby-demo/post_20260516_004.telegram.txt",
+        "post_text": "data/drafts/mom-baby-demo/post_20260516_004.post.txt"
+      }
+    },
+    {
+      "post_id": "post_20260516_005",
+      "product": {
+        "url": "https://shopee.vn/example-vitamin",
+        "title": "Vitamin tăng đề kháng cho bé",
+        "category": "vitamin",
+        "price_vnd": 199000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": "high risk example should be blocked or ranked low"
+      },
+      "score": 0,
+      "score_reasons": [
+        "risky_category_penalty:vitamin-70",
+        "price_fit+15"
+      ],
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_005",
+        "product_id": "vitamin-tăng-đề-kháng-cho-bé"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_005",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_005",
+        "sub4": "vitamin-tăng-đề-kháng-cho-bé"
+      },
+      "compliance": {
+        "status": "block",
+        "risk_flags": [
+          "high_risk_category:vitamin",
+          "health_claim"
+        ],
+        "required_edits": [
+          "Replace product or require manual legal/compliance review.",
+          "Remove or rewrite forbidden claim: 'tăng đề kháng'."
+        ]
+      },
+      "files": {
+        "telegram_card": "data/drafts/mom-baby-demo/post_20260516_005.telegram.txt",
+        "post_text": "data/drafts/mom-baby-demo/post_20260516_005.post.txt"
+      }
+    }
+  ]
+}

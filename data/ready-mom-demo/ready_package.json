@@ -1,0 +1,236 @@
+{
+  "batch_key": "mom-demo",
+  "facebook_verified": false,
+  "dry_run_passed": false,
+  "ready_count": 1,
+  "held_count": 4,
+  "ready": [
+    {
+      "post_id": "post_20260516_001",
+      "product": {
+        "url": "https://shopee.vn/example-storage",
+        "title": "Giỏ sắp xếp đồ bé tiện gọn",
+        "category": "storage",
+        "price_vnd": 129000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": "giúp mẹ cất khăn bỉm đồ lặt vặt gọn hơn"
+      },
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_001",
+        "product_id": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_001",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_001",
+        "sub4": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+      },
+      "approval": {
+        "batch_key": "mom-demo",
+        "post_id": "post_20260516_001",
+        "status": "approved",
+        "reason": "demo ok",
+        "decided_at": "2026-05-16 14:22:50"
+      },
+      "publish_gate": {
+        "allowed": false,
+        "reasons": [
+          "facebook_not_verified",
+          "publish_dry_run_not_passed"
+        ],
+        "fallback_required": true
+      },
+      "post_text": "Góc đồ của bé rất dễ bừa chỉ sau một buổi. Một món nhỏ nhưng giúp mẹ đỡ mất thời gian tìm đồ.\n\nMẹ có thể tham khảo Giỏ sắp xếp đồ bé tiện gọn nếu đang muốn sắp xếp bỉm, khăn, bình sữa hoặc đồ lặt vặt của bé gọn hơn. Điểm đáng chú ý là dùng cho việc tổ chức đồ trong nhà, không cần nói quá công dụng. Giá tham khảo khoảng 129.000đ, có thể thay đổi theo thời điểm.\n\nNếu thấy hợp nhu cầu, mẹ xem chi tiết ở link nhé.\n\nBài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ mà không làm thay đổi giá mua của bạn.\n#tiepthilienket #ShopeeAffiliate\n"
+    }
+  ],
+  "held": [
+    {
+      "post_id": "post_20260516_002",
+      "product": {
+        "url": "https://shopee.vn/example-feeding",
+        "title": "Hộp chia sữa 3 ngăn",
+        "category": "feeding",
+        "price_vnd": 99000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": "tiện mang theo khi ra ngoài"
+      },
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_002",
+        "product_id": "hộp-chia-sữa-3-ngăn"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_002",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_002",
+        "sub4": "hộp-chia-sữa-3-ngăn"
+      },
+      "approval": {
+        "batch_key": "mom-demo",
+        "post_id": "post_20260516_002",
+        "status": "pending",
+        "reason": "",
+        "decided_at": null
+      },
+      "publish_gate": {
+        "allowed": false,
+        "reasons": [
+          "not_approved_by_snail",
+          "facebook_not_verified",
+          "publish_dry_run_not_passed"
+        ],
+        "fallback_required": true
+      },
+      "post_text": "Chuẩn bị đồ ăn dặm/bình sữa gọn hơn thì buổi sáng của mẹ cũng nhẹ hơn một chút.\n\nHộp chia sữa 3 ngăn phù hợp để mẹ tham khảo khi cần chia, cất hoặc mang theo đồ dùng ăn dặm/bỉm sữa. Nên kiểm tra kỹ chất liệu, dung tích và đánh giá shop trước khi mua. Giá tham khảo khoảng 99.000đ, có thể thay đổi theo thời điểm.\n\nNếu thấy hợp nhu cầu, mẹ xem chi tiết ở link nhé.\n\nBài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ mà không làm thay đổi giá mua của bạn.\n#tiepthilienket #ShopeeAffiliate\n"
+    },
+    {
+      "post_id": "post_20260516_003",
+      "product": {
+        "url": "https://shopee.vn/example-toy",
+        "title": "Bộ thẻ học màu sắc cho bé",
+        "category": "toy",
+        "price_vnd": 59000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": "đồ chơi giáo dục nhẹ không claim phát triển trí não"
+      },
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_003",
+        "product_id": "bộ-thẻ-học-màu-sắc-cho-bé"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_003",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_003",
+        "sub4": "bộ-thẻ-học-màu-sắc-cho-bé"
+      },
+      "approval": {
+        "batch_key": "mom-demo",
+        "post_id": "post_20260516_003",
+        "status": "pending",
+        "reason": "",
+        "decided_at": null
+      },
+      "publish_gate": {
+        "allowed": false,
+        "reasons": [
+          "not_approved_by_snail",
+          "facebook_not_verified",
+          "publish_dry_run_not_passed"
+        ],
+        "fallback_required": true
+      },
+      "post_text": "Một món đồ chơi tốt không cần quảng cáo quá đà — chỉ cần bé thích khám phá và mẹ thấy phù hợp.\n\nBộ thẻ học màu sắc cho bé có thể là lựa chọn để mẹ tham khảo cho giờ chơi của bé. Nên chọn theo độ tuổi, chất liệu và mức độ an toàn, không nên kỳ vọng hay cam kết tác dụng phát triển vượt trội. Giá tham khảo khoảng 59.000đ, có thể thay đổi theo thời điểm.\n\nNếu thấy hợp nhu cầu, mẹ xem chi tiết ở link nhé.\n\nBài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ mà không làm thay đổi giá mua của bạn.\n#tiepthilienket #ShopeeAffiliate\n"
+    },
+    {
+      "post_id": "post_20260516_004",
+      "product": {
+        "url": "https://shopee.vn/example-safety",
+        "title": "Bọc góc bàn mềm cho bé",
+        "category": "home_safety",
+        "price_vnd": 45000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": "phụ kiện an toàn nhà cửa khi bé tập đi"
+      },
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_004",
+        "product_id": "bọc-góc-bàn-mềm-cho-bé"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_004",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_004",
+        "sub4": "bọc-góc-bàn-mềm-cho-bé"
+      },
+      "approval": {
+        "batch_key": "mom-demo",
+        "post_id": "post_20260516_004",
+        "status": "pending",
+        "reason": "",
+        "decided_at": null
+      },
+      "publish_gate": {
+        "allowed": false,
+        "reasons": [
+          "not_approved_by_snail",
+          "facebook_not_verified",
+          "publish_dry_run_not_passed"
+        ],
+        "fallback_required": true
+      },
+      "post_text": "Khi bé bắt đầu bò/đi men, những góc nhỏ trong nhà cũng đáng để để ý hơn.\n\nBọc góc bàn mềm cho bé là nhóm đồ hỗ trợ sắp xếp/an toàn sinh hoạt trong nhà. Mẹ nên xem kỹ kích thước, chất liệu và cách lắp trước khi chọn. Giá tham khảo khoảng 45.000đ, có thể thay đổi theo thời điểm.\n\nNếu thấy hợp nhu cầu, mẹ xem chi tiết ở link nhé.\n\nBài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ mà không làm thay đổi giá mua của bạn.\n#tiepthilienket #ShopeeAffiliate\n"
+    },
+    {
+      "post_id": "post_20260516_005",
+      "product": {
+        "url": "https://shopee.vn/example-vitamin",
+        "title": "Vitamin tăng đề kháng cho bé",
+        "category": "vitamin",
+        "price_vnd": 199000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": "high risk example should be blocked or ranked low"
+      },
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_005",
+        "product_id": "vitamin-tăng-đề-kháng-cho-bé"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_005",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_005",
+        "sub4": "vitamin-tăng-đề-kháng-cho-bé"
+      },
+      "approval": {
+        "batch_key": "mom-demo",
+        "post_id": "post_20260516_005",
+        "status": "pending",
+        "reason": "",
+        "decided_at": null
+      },
+      "publish_gate": {
+        "allowed": false,
+        "reasons": [
+          "not_approved_by_snail",
+          "compliance_not_pass:block",
+          "facebook_not_verified",
+          "publish_dry_run_not_passed"
+        ],
+        "fallback_required": true
+      },
+      "post_text": "Một gợi ý nhỏ cho mẹ đang tìm đồ tiện dùng trong sinh hoạt hằng ngày với bé.\n\nMẹ có thể tham khảo Vitamin tăng đề kháng cho bé. Trước khi mua, nên kiểm tra kỹ thông tin shop, đánh giá, chất liệu và mức độ phù hợp với bé/nhà mình. Giá tham khảo khoảng 199.000đ, có thể thay đổi theo thời điểm.\n\nNếu thấy hợp nhu cầu, mẹ xem chi tiết ở link nhé.\n\nBài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ mà không làm thay đổi giá mua của bạn.\n#tiepthilienket #ShopeeAffiliate\n"
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+# Paste one Shopee/Accesstrade URL per line.
+# Optional metadata can be appended after a pipe.
+# Example:
+# https://shopee.vn/example-product | title=Hộp chia sữa | category=feeding | price=99000
+

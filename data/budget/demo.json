@@ -1,0 +1,15 @@
+{
+  "date": "2026-05-16",
+  "cap_vnd": 30000,
+  "soft_cap_vnd": 24000,
+  "spent_vnd": 5000,
+  "remaining_vnd": 25000,
+  "mode": "normal",
+  "events": [
+    {
+      "phase": "draft",
+      "amount_vnd": 5000,
+      "note": "demo"
+    }
+  ]
+}

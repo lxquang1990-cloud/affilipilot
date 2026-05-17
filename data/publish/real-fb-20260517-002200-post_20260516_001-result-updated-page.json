@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "status": 400,
+  "response": {
+    "error": {
+      "message": "(#100) The global id 61572087023365 is not allowed for this call",
+      "type": "OAuthException",
+      "code": 100,
+      "fbtrace_id": "A4WiLO-pCIG8VMLfwuH6Xzw"
+    }
+  },
+  "endpoint": "/61572087023365/feed"
+}

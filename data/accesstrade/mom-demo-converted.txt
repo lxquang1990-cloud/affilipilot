@@ -1,0 +1,2 @@
+https://shopee.vn/example-storage | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | affiliate_url=https://shopee.vn/example-storage | tracking_url=https://shopee.vn/example-storage | notes=giúp mẹ cất khăn bỉm đồ lặt vặt gọn hơn
+https://shopee.vn/example-feeding | title=Hộp chia sữa 3 ngăn | category=feeding | price=99000 | affiliate_url=https://shopee.vn/example-feeding | tracking_url=https://shopee.vn/example-feeding | notes=tiện mang theo khi ra ngoài

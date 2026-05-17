@@ -1,0 +1,52 @@
+{
+  "created_at": "2026-05-16T14:03:06.779671+00:00",
+  "input_path": "data/telegram-mock/inbound/tg-20260516-210306.links.txt",
+  "out_dir": "data/telegram-mock/drafts/tg-20260516-210306",
+  "total_products": 1,
+  "selected": 1,
+  "posts": [
+    {
+      "post_id": "post_20260516_001",
+      "product": {
+        "url": "https://shopee.vn/a",
+        "title": "Giỏ sắp xếp đồ bé tiện gọn",
+        "category": "storage",
+        "price_vnd": 129000,
+        "commission_rate": null,
+        "image_url": "",
+        "notes": ""
+      },
+      "score": 85,
+      "score_reasons": [
+        "safe_category_bonus:storage+20",
+        "price_fit+15",
+        "content_angle+10"
+      ],
+      "tracking": {
+        "channel": "facebook",
+        "property_name": "nangniutraingottinhyeu",
+        "post_id": "post_20260516_001",
+        "product_id": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+      },
+      "utm": {
+        "utm_source": "facebook",
+        "utm_medium": "page_post",
+        "utm_campaign": "affilipilot_mom_baby_202605",
+        "utm_content": "post_20260516_001",
+        "sub1": "facebook",
+        "sub2": "nangniutraingottinhyeu",
+        "sub3": "post_20260516_001",
+        "sub4": "giỏ-sắp-xếp-đồ-bé-tiện-gọn"
+      },
+      "compliance": {
+        "status": "pass",
+        "risk_flags": [],
+        "required_edits": []
+      },
+      "files": {
+        "telegram_card": "data/telegram-mock/drafts/tg-20260516-210306/post_20260516_001.telegram.txt",
+        "post_text": "data/telegram-mock/drafts/tg-20260516-210306/post_20260516_001.post.txt"
+      }
+    }
+  ]
+}

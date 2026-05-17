@@ -1,0 +1,94 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+from affilipilot.db import AffiliPilotDB
+from affilipilot.telegram.commands import TelegramIntent, help_text, parse_telegram_text
+from affilipilot.telegram.delivery import queue_approval_batch
+from affilipilot.workflows.approval import create_approval_batch, decide_post, render_status
+
+
+@dataclass
+class AdapterConfig:
+    db_path: Path
+    work_dir: Path
+    limit: int = 5
+    outbox_path: Path | None = None
+
+
+@dataclass
+class AdapterResult:
+    intent: TelegramIntent
+    text: str
+    attachments: list[Path]
+
+
+def _latest_batch_key(db_path: Path) -> str | None:
+    db = AffiliPilotDB(db_path)
+    db.init()
+    with db.connect() as conn:
+        row = conn.execute("SELECT batch_key FROM batches ORDER BY id DESC LIMIT 1").fetchone()
+    return row["batch_key"] if row else None
+
+
+def _write_inbound_links(work_dir: Path, body: str, batch_key: str) -> Path:
+    inbound_dir = work_dir / "inbound"
+    inbound_dir.mkdir(parents=True, exist_ok=True)
+    path = inbound_dir / f"{batch_key}.links.txt"
+    path.write_text(body.strip() + "\n", encoding="utf-8")
+    return path
+
+
+def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
+    command = parse_telegram_text(text)
+    config.work_dir.mkdir(parents=True, exist_ok=True)
+
+    if command.intent == TelegramIntent.HELP:
+        return AdapterResult(command.intent, help_text(), [])
+
+    if command.intent == TelegramIntent.CREATE_BATCH:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        batch_key = f"tg-{stamp}"
+        input_path = _write_inbound_links(config.work_dir, command.args.get("body", ""), batch_key)
+        out_dir = config.work_dir / "drafts" / batch_key
+        manifest = create_approval_batch(input_path, out_dir, config.db_path, batch_key=batch_key, limit=config.limit)
+        preview = out_dir / "approval_batch_preview.txt"
+        queued_count = 0
+        if config.outbox_path:
+            queued_count = len(queue_approval_batch(config.db_path, batch_key=batch_key, outbox_path=config.outbox_path))
+        lines = [
+            f"🐌 AffiliPilot batch created: {batch_key}",
+            f"Selected: {manifest['selected']}/{manifest['total_products']}",
+            f"Status: /status {batch_key}",
+            "Review preview attached/generated.",
+        ]
+        if config.outbox_path:
+            lines.append(f"Telegram outbox queued: {queued_count} messages")
+        return AdapterResult(command.intent, "\n".join(lines), [preview])
+
+    if command.intent == TelegramIntent.STATUS:
+        batch_key = command.args.get("batch_key") or "latest"
+        if batch_key == "latest":
+            batch_key = _latest_batch_key(config.db_path)
+        if not batch_key:
+            return AdapterResult(command.intent, "No batch found yet.", [])
+        return AdapterResult(command.intent, render_status(config.db_path, batch_key=batch_key), [])
+
+    if command.intent in {TelegramIntent.APPROVE, TelegramIntent.REJECT, TelegramIntent.NEEDS_EDIT, TelegramIntent.BLACKLIST}:
+        batch_key = _latest_batch_key(config.db_path)
+        if not batch_key:
+            return AdapterResult(command.intent, "No batch found yet.", [])
+        decision_map = {
+            TelegramIntent.APPROVE: "approved",
+            TelegramIntent.REJECT: "rejected",
+            TelegramIntent.NEEDS_EDIT: "needs_edit",
+            TelegramIntent.BLACKLIST: "blacklisted",
+        }
+        post_id = command.args["post_id"]
+        reason = command.args.get("reason", "")
+        decide_post(config.db_path, batch_key=batch_key, post_id=post_id, decision=decision_map[command.intent], reason=reason)
+        return AdapterResult(command.intent, render_status(config.db_path, batch_key=batch_key), [])
+
+    return AdapterResult(command.intent, help_text(), [])
