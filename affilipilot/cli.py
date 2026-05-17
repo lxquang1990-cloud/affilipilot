@@ -25,6 +25,7 @@ from affilipilot.workflows.batch_status import build_batch_status, render_batch_
 from affilipilot.workflows.daily_batch import build_batch
 from affilipilot.workflows.run_day import run_day
 from affilipilot.workflows.scan_to_draft import draft_from_scan, run_product_scan
+from affilipilot.scanner.enrich import enrich_batch_media, enrich_product_from_url
 
 
 def cmd_scan_products(args: argparse.Namespace) -> int:
@@ -59,6 +60,27 @@ def cmd_scan_draft(args: argparse.Namespace) -> int:
         conv = summary["conversion"]
         print(f"Accesstrade conversion: ok={conv['ok_count']} failed={conv['failed_count']} dry_run={conv['dry_run']}")
     return 0 if summary["selected"] else 2
+
+
+def cmd_enrich_url(args: argparse.Namespace) -> int:
+    data = enrich_product_from_url(args.url, title=args.title, category=args.category, source=args.source, timeout=args.timeout)
+    print(f"AffiliPilot enrich-url: {data.get('title') or args.title or args.url}")
+    print(f"URL: {data.get('url')}")
+    print(f"Image: {data.get('image_url') or '(none)'}")
+    print(f"Product URLs found: {len(data.get('product_urls') or [])}")
+    for url in (data.get('product_urls') or [])[:5]:
+        print(f"- {url}")
+    return 0 if data.get('image_url') or data.get('product_urls') else 2
+
+
+def cmd_enrich_media(args: argparse.Namespace) -> int:
+    summary = enrich_batch_media(args.db, batch_key=args.batch_key, out_dir=args.out_dir, limit=args.limit)
+    print(f"AffiliPilot enrich-media: {summary['batch_key']}")
+    print(f"Media updated: {summary['updated']}")
+    print(f"Media failed: {summary['failed']}")
+    for item in summary['results']:
+        print(f"- {item['post_id']}: {item['status']}")
+    return 0 if summary['failed'] == 0 else 2
 
 
 def cmd_batch_preview(args: argparse.Namespace) -> int:
@@ -355,6 +377,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--real-accesstrade", action="store_true", help="Call real Accesstrade API when --convert-affiliate is set")
     p.add_argument("--campaign-key", default="", help="Optional Accesstrade campaign key override")
     p.set_defaults(func=cmd_scan_draft)
+
+    p = sub.add_parser("enrich-url", help="Try multiple strategies to extract product metadata/media from one URL")
+    p.add_argument("--url", required=True)
+    p.add_argument("--title", default="")
+    p.add_argument("--category", default="unknown")
+    p.add_argument("--source", default="AUTO")
+    p.add_argument("--timeout", type=int, default=30)
+    p.set_defaults(func=cmd_enrich_url)
+
+    p = sub.add_parser("enrich-media", help="Try to fill missing product media for an existing batch")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--batch-key", required=True)
+    p.add_argument("--out-dir", required=True)
+    p.add_argument("--limit", type=int, default=None)
+    p.set_defaults(func=cmd_enrich_media)
 
     p = sub.add_parser("batch-preview", help="Build scored draft posts and Telegram approval-card previews from product links/CSV")
     p.add_argument("--input", required=True, help="Path to product_links.txt or products.csv")
