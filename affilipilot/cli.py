@@ -24,6 +24,41 @@ from affilipilot.workflows.approval import create_approval_batch, decide_post, r
 from affilipilot.workflows.batch_status import build_batch_status, render_batch_status
 from affilipilot.workflows.daily_batch import build_batch
 from affilipilot.workflows.run_day import run_day
+from affilipilot.workflows.scan_to_draft import draft_from_scan, run_product_scan
+
+
+def cmd_scan_products(args: argparse.Namespace) -> int:
+    result = run_product_scan(args.url, args.out, source=args.source, category=args.category, campaign_key=args.campaign_key, limit=args.limit, timeout=args.timeout)
+    print(f"AffiliPilot scan-products: {result['total']} items")
+    print(f"Source: {args.source} URL: {args.url}")
+    if result.get("errors"):
+        print("Errors: " + "; ".join(result["errors"]))
+    print(f"Output JSON: {result['scan_path']}")
+    for item in result.get("items", [])[:5]:
+        print(f"- {item.get('title') or '(no title)'} | {item.get('price_vnd') or 'price?'} | {item.get('url')}")
+    return 0 if result["total"] else 2
+
+
+def cmd_scan_draft(args: argparse.Namespace) -> int:
+    summary = draft_from_scan(
+        args.scan,
+        work_dir=args.work_dir,
+        db_path=args.db,
+        batch_key=args.batch_key,
+        outbox_path=args.outbox,
+        limit=args.limit,
+        convert_affiliate=args.convert_affiliate,
+        real_accesstrade=args.real_accesstrade,
+        campaign_key=args.campaign_key,
+    )
+    print(f"AffiliPilot scan-draft complete: {summary['batch_key']}")
+    print(f"Products: {summary['total_products']} considered, {summary['selected']} selected")
+    print(f"Drafts: {summary['drafts_dir']}")
+    print(f"Outbox: {summary['outbox_path']} ({summary['outbox_messages']} messages queued)")
+    if summary.get("conversion"):
+        conv = summary["conversion"]
+        print(f"Accesstrade conversion: ok={conv['ok_count']} failed={conv['failed_count']} dry_run={conv['dry_run']}")
+    return 0 if summary["selected"] else 2
 
 
 def cmd_batch_preview(args: argparse.Namespace) -> int:
@@ -289,6 +324,28 @@ def cmd_accesstrade_convert(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AffiliPilot Lite CLI")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("scan-products", help="Scan a page URL and extract product candidates into scan JSON")
+    p.add_argument("--url", required=True)
+    p.add_argument("--out", default="data/scans/products.json")
+    p.add_argument("--source", default="AUTO", help="Source label, e.g. CELLPHONES, LAZADA, SHOPEE")
+    p.add_argument("--category", default="unknown", help="Default category assigned to scanned products")
+    p.add_argument("--campaign-key", default="", help="Optional Accesstrade campaign key for downstream conversion")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--timeout", type=int, default=30)
+    p.set_defaults(func=cmd_scan_products)
+
+    p = sub.add_parser("scan-draft", help="Turn scan JSON into scored drafts and Telegram approval outbox")
+    p.add_argument("--scan", required=True, help="Scan JSON from scan-products")
+    p.add_argument("--work-dir", default="data/runs/scan-draft")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--batch-key", required=True)
+    p.add_argument("--outbox", default="data/outbox/scan-draft.json")
+    p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--convert-affiliate", action="store_true", help="Convert scanned URLs through Accesstrade before drafting; dry-run unless --real-accesstrade")
+    p.add_argument("--real-accesstrade", action="store_true", help="Call real Accesstrade API when --convert-affiliate is set")
+    p.add_argument("--campaign-key", default="", help="Optional Accesstrade campaign key override")
+    p.set_defaults(func=cmd_scan_draft)
 
     p = sub.add_parser("batch-preview", help="Build scored draft posts and Telegram approval-card previews from product links/CSV")
     p.add_argument("--input", required=True, help="Path to product_links.txt or products.csv")

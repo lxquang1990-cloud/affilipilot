@@ -130,3 +130,5 @@ Current verification includes:
 - [`docs/openclaw-telegram-bridge.md`](docs/openclaw-telegram-bridge.md) — safe plan-only OpenClaw Telegram delivery handoff
 
 - [`docs/facebook-token-manager.md`](docs/facebook-token-manager.md) — safe Facebook token exchange/refresh flow
+
+- [`docs/product-scanner.md`](docs/product-scanner.md) — scan category/deal pages into product drafts and approval batches
