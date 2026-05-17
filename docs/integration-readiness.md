@@ -23,7 +23,7 @@ PYTHONPATH=. python3 -m affilipilot readiness
 Required:
 
 - `ACCESSTRADE_TOKEN` present in `/home/snail/.openclaw/workspace/secrets/affilipilot.env`.
-- `ACCESSTRADE_SHOPEE_CAMPAIGN_ID` known/present.
+- Accesstrade campaign known/present: `ACCESSTRADE_CAMPAIGN_ID` or one/more `ACCESSTRADE_CAMPAIGN_<KEY>` entries.
 - Tracking payload can be generated.
 - Real API call must be added behind a health-check and tested with one harmless link first.
 

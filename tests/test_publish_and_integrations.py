@@ -81,7 +81,7 @@ def test_real_facebook_publish_requires_config():
 def test_accesstrade_payload_and_health():
     health = check_accesstrade_config(AccesstradeConfig(token=""))
     assert not health.configured
-    assert "missing_or_pending_ACCESSTRADE_SHOPEE_CAMPAIGN_ID" in health.reasons
+    assert "missing_ACCESSTRADE_CAMPAIGN_ID" in health.reasons
     ready = check_accesstrade_config(AccesstradeConfig(token="tok", campaign_id="123"))
     assert ready.configured
     payload = build_tracking_payload(campaign_id="123", urls=["https://shopee.vn/a"], utm={"sub1": "facebook", "utm_source": "facebook"})

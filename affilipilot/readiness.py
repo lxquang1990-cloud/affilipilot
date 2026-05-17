@@ -62,7 +62,7 @@ def build_readiness_report() -> ReadinessReport:
         ReadinessCheck("approval_state", "pass", "SQLite approval decisions supported", ("local", "publish")),
         ReadinessCheck("local_smoke", "pass", "demo-happy-path command available; verify_all runs smoke", ("local",)),
         ReadinessCheck("accesstrade_token", "pass" if cfg.accesstrade_token_present else "missing", "required for tracking-link API", ("accesstrade",)),
-        ReadinessCheck("accesstrade_campaign", "pass" if cfg.accesstrade_campaign_present else "missing", "required for Shopee campaign tracking-link API", ("accesstrade",)),
+        ReadinessCheck("accesstrade_campaign", "pass" if cfg.accesstrade_campaign_present else "missing", f"required for tracking-link API; configured campaigns: {cfg.accesstrade_campaign_count}", ("accesstrade",)),
         ReadinessCheck("facebook_page_id", "pass" if cfg.facebook_page_id_present else "missing", "required for Graph API token check/publish", ("facebook",)),
         ReadinessCheck("facebook_page_token", "pass" if cfg.facebook_page_token_present else "missing", "required for Graph API token check/publish", ("facebook",)),
         ReadinessCheck("9router_key", "pass" if cfg.router_key_present else "optional", "only needed for future real LLM generation; deterministic fallback works", ("future_llm",)),

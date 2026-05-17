@@ -9,7 +9,7 @@ from affilipilot.links.subid import build_utm, make_tracking_identity
 from affilipilot.workflows.daily_batch import load_products
 
 
-def convert_input_links(input_path: str | Path, out_path: str | Path, *, dry_run: bool = True, limit: int | None = None) -> dict:
+def convert_input_links(input_path: str | Path, out_path: str | Path, *, dry_run: bool = True, limit: int | None = None, campaign_key: str = "") -> dict:
     products = load_products(input_path)
     if limit is not None:
         products = products[:limit]
@@ -17,7 +17,7 @@ def convert_input_links(input_path: str | Path, out_path: str | Path, *, dry_run
     for index, product in enumerate(products, 1):
         identity = make_tracking_identity(product.title or product.url, index)
         utm = build_utm(identity)
-        result = create_tracking_link(url=product.url, utm=utm, dry_run=dry_run)
+        result = create_tracking_link(url=product.url, utm=utm, dry_run=dry_run, campaign_key=campaign_key)
         row = {
             "index": index,
             "product": asdict(product),

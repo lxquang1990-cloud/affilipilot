@@ -15,9 +15,11 @@ def test_load_config_without_secret(tmp_path):
 
 def test_load_config_with_secret_markers(tmp_path):
     env = tmp_path / "affilipilot.env"
-    env.write_text("ACCESSTRADE_TOKEN=abc\nFACEBOOK_PAGE_ID=page\nFACEBOOK_PAGE_ACCESS_TOKEN=tok\n9ROUTER_API_KEY=router\n9ROUTER_API_ENDPOINT=http://127.0.0.1:20128/v1\nAFFILIPILOT_DAILY_BUDGET_VND=20000\n", encoding="utf-8")
+    env.write_text("ACCESSTRADE_TOKEN=abc\nACCESSTRADE_CAMPAIGN_LAZADA=222\nFACEBOOK_PAGE_ID=page\nFACEBOOK_PAGE_ACCESS_TOKEN=tok\n9ROUTER_API_KEY=router\n9ROUTER_API_ENDPOINT=http://127.0.0.1:20128/v1\nAFFILIPILOT_DAILY_BUDGET_VND=20000\n", encoding="utf-8")
     cfg = load_config(env)
     assert cfg.accesstrade_token_present
+    assert cfg.accesstrade_campaign_present
+    assert cfg.accesstrade_campaign_count == 1
     assert cfg.facebook_page_id_present
     assert cfg.router_key_present
     assert cfg.router_endpoint_present

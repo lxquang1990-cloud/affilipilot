@@ -261,7 +261,7 @@ def cmd_validate_input(args: argparse.Namespace) -> int:
 
 
 def cmd_accesstrade_convert(args: argparse.Namespace) -> int:
-    summary = convert_input_links(args.input, args.out, dry_run=args.dry_run, limit=args.limit)
+    summary = convert_input_links(args.input, args.out, dry_run=args.dry_run, limit=args.limit, campaign_key=args.campaign_key)
     print(f"Accesstrade convert: ok={summary['ok_count']} failed={summary['failed_count']} dry_run={summary['dry_run']}")
     print(f"Output JSON: {args.out}")
     if args.write_input:
@@ -432,6 +432,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out", default="data/accesstrade/converted.json")
     p.add_argument("--write-input", default="", help="Optional converted .txt input path")
     p.add_argument("--limit", type=int, default=None)
+    p.add_argument("--campaign-key", default="", help="Optional campaign key, e.g. SHOPEE, LAZADA, TIKI. Auto-detected by domain when configured.")
     p.add_argument("--real", dest="dry_run", action="store_false", help="Call real Accesstrade API")
     p.set_defaults(dry_run=True)
     p.set_defaults(func=cmd_accesstrade_convert)

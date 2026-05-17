@@ -11,6 +11,19 @@ ENV_TEMPLATE = """# AffiliPilot secrets — fill locally, never commit or paste 
 
 # Accesstrade
 ACCESSTRADE_TOKEN=
+# Generic default campaign. For multiple campaigns, prefer ACCESSTRADE_CAMPAIGN_<KEY>.
+ACCESSTRADE_CAMPAIGN_ID=
+ACCESSTRADE_CHANNEL_ID=
+
+# Optional multi-campaign examples.
+ACCESSTRADE_CAMPAIGN_SHOPEE=
+ACCESSTRADE_CAMPAIGN_SHOPEE_CHANNEL_ID=
+ACCESSTRADE_CAMPAIGN_SHOPEE_DOMAINS=shopee.vn,shopee.com
+ACCESSTRADE_CAMPAIGN_LAZADA=
+ACCESSTRADE_CAMPAIGN_LAZADA_CHANNEL_ID=
+ACCESSTRADE_CAMPAIGN_LAZADA_DOMAINS=lazada.vn,lazada.com
+
+# Backward-compatible legacy key; still supported.
 ACCESSTRADE_SHOPEE_CAMPAIGN_ID=
 
 # Facebook Page publishing

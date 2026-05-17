@@ -1,6 +1,6 @@
 # Manual Affiliate-ready Workflow
 
-Use this while waiting for `ACCESSTRADE_SHOPEE_CAMPAIGN_ID` approval.
+Use this while waiting for Accesstrade campaign approval/config (`ACCESSTRADE_CAMPAIGN_ID` or `ACCESSTRADE_CAMPAIGN_<KEY>`).
 
 ## Required input per product
 
