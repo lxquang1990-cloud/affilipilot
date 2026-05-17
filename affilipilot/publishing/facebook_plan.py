@@ -8,6 +8,7 @@ from typing import Any
 from affilipilot.db import AffiliPilotDB
 from affilipilot.publishing.facebook import FacebookConfig, check_facebook_config
 from affilipilot.publishing.gate import evaluate_publish_gate
+from affilipilot.quality import evaluate_quality_gate
 
 
 @dataclass
@@ -72,12 +73,13 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
             facebook_verified=health.verified,
             dry_run_passed=bool(text),
         )
-        reasons = list(gate.reasons)
+        quality = evaluate_quality_gate(post)
+        reasons = list(gate.reasons) + [reason for reason in quality.reasons if reason not in gate.reasons]
         if text in seen_texts and text:
             reasons.append("duplicate_text")
         seen_texts.add(text)
 
-        if gate.allowed and "duplicate_text" not in reasons:
+        if gate.allowed and quality.passed and "duplicate_text" not in reasons:
             graph = build_graph_payload(page_id=config.page_id, message=text, link=_post_link(post), image_path=post.get("files", {}).get("image", ""))
             plans.append(FacebookPostPlan(
                 post_id=post_id,

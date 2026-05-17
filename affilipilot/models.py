@@ -25,6 +25,9 @@ class ProductCandidate:
     affiliate_url: str = ""
     tracking_url: str = ""
     notes: str = ""
+    media_source: str = ""
+    media_confidence: str = ""
+    original_url: str = ""
 
 
 @dataclass

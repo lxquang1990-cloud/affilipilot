@@ -30,6 +30,9 @@ def parse_link_lines(text: str) -> list[ProductCandidate]:
             affiliate_url=meta.get("affiliate_url", ""),
             tracking_url=meta.get("tracking_url", ""),
             notes=meta.get("notes", ""),
+            media_source=meta.get("media_source", ""),
+            media_confidence=meta.get("media_confidence", ""),
+            original_url=meta.get("original_url", ""),
         ))
     return products
 
@@ -52,5 +55,8 @@ def parse_products_csv(path: str | Path) -> list[ProductCandidate]:
                 affiliate_url=row.get("affiliate_url", "").strip(),
                 tracking_url=row.get("tracking_url", "").strip(),
                 notes=row.get("notes", "").strip(),
+                media_source=row.get("media_source", "").strip(),
+                media_confidence=row.get("media_confidence", "").strip(),
+                original_url=row.get("original_url", "").strip(),
             ))
     return products

@@ -13,6 +13,7 @@ from affilipilot.publishing.facebook_plan import plan_facebook_batch, render_fac
 from affilipilot.publishing.facebook_token import check_facebook_token, render_facebook_token_report
 from affilipilot.publishing.facebook_token_manager import derive_page_token, exchange_short_token, inspect_current_page_token, refresh_from_user_token, render_token_manager_result
 from affilipilot.publishing.ready_package import build_ready_to_post_package
+from affilipilot.publishing.lifecycle import record_publish_event, render_publish_status
 from affilipilot.readiness import build_readiness_report, render_readiness_report
 from affilipilot.security import write_secret_template
 from affilipilot.telegram.adapter import AdapterConfig, handle_text_message
@@ -26,6 +27,8 @@ from affilipilot.workflows.daily_batch import build_batch
 from affilipilot.workflows.run_day import run_day
 from affilipilot.workflows.scan_to_draft import draft_from_scan, run_product_scan
 from affilipilot.scanner.enrich import enrich_batch_media, enrich_product_from_url
+from affilipilot.scanner.browser_plan import build_browser_scan_plan, render_browser_scan_plan
+from affilipilot.quality import evaluate_quality_gate
 
 
 def cmd_scan_products(args: argparse.Namespace) -> int:
@@ -83,6 +86,31 @@ def cmd_enrich_media(args: argparse.Namespace) -> int:
     return 0 if summary['failed'] == 0 else 2
 
 
+def cmd_browser_scan_plan(args: argparse.Namespace) -> int:
+    plan = build_browser_scan_plan(args.url, source=args.source, category=args.category, out_path=args.out)
+    print(render_browser_scan_plan(plan))
+    if args.out:
+        print(f"Plan JSON: {args.out}")
+    return 0
+
+
+def cmd_quality_gate(args: argparse.Namespace) -> int:
+    from affilipilot.db import AffiliPilotDB
+    db = AffiliPilotDB(args.db)
+    batch = db.get_batch(args.batch_key)
+    if not batch:
+        raise KeyError(f"Batch not found: {args.batch_key}")
+    failed = 0
+    print(f"🐌 AffiliPilot quality gate — {args.batch_key}")
+    for post in batch["manifest"].get("posts", []):
+        result = evaluate_quality_gate(post)
+        status = "PASS" if result.passed else "BLOCK"
+        if not result.passed:
+            failed += 1
+        print(f"- {post['post_id']}: {status} score={result.score} media={result.media_score} caption={result.caption_score}" + (f" — {', '.join(result.reasons)}" if result.reasons else ""))
+    return 0 if failed == 0 else 2
+
+
 def cmd_batch_preview(args: argparse.Namespace) -> int:
     manifest = build_batch(args.input, args.out_dir, limit=args.limit)
     print(f"AffiliPilot batch preview created: {manifest['selected']}/{manifest['total_products']} selected")
@@ -114,6 +142,17 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 def cmd_batch_status(args: argparse.Namespace) -> int:
     print(render_batch_status(build_batch_status(args.db, batch_key=args.batch_key, facebook_plan=args.facebook_plan or None)))
+    return 0
+
+
+def cmd_publish_status(args: argparse.Namespace) -> int:
+    print(render_publish_status(args.db, batch_key=args.batch_key))
+    return 0
+
+
+def cmd_record_publish_event(args: argparse.Namespace) -> int:
+    record_publish_event(args.db, batch_key=args.batch_key, post_id=args.post_id, state=args.state, facebook_post_id=args.facebook_post_id, reason=args.reason)
+    print(f"Publish event recorded: {args.batch_key}/{args.post_id} -> {args.state}")
     return 0
 
 
@@ -392,6 +431,32 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-dir", required=True)
     p.add_argument("--limit", type=int, default=None)
     p.set_defaults(func=cmd_enrich_media)
+
+    p = sub.add_parser("browser-scan-plan", help="Create a safe browser-render extraction plan for dynamic product pages")
+    p.add_argument("--url", required=True)
+    p.add_argument("--out", default="")
+    p.add_argument("--source", default="AUTO")
+    p.add_argument("--category", default="unknown")
+    p.set_defaults(func=cmd_browser_scan_plan)
+
+    p = sub.add_parser("quality-gate", help="Evaluate product-detail/media/caption quality before publish")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--batch-key", required=True)
+    p.set_defaults(func=cmd_quality_gate)
+
+    p = sub.add_parser("publish-status", help="Show latest publish lifecycle state for a batch")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--batch-key", required=True)
+    p.set_defaults(func=cmd_publish_status)
+
+    p = sub.add_parser("record-publish-event", help="Record a publish lifecycle event without calling Facebook")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--batch-key", required=True)
+    p.add_argument("--post-id", required=True)
+    p.add_argument("--state", required=True, choices=["planned", "published", "hidden", "deleted", "failed"])
+    p.add_argument("--facebook-post-id", default="")
+    p.add_argument("--reason", default="")
+    p.set_defaults(func=cmd_record_publish_event)
 
     p = sub.add_parser("batch-preview", help="Build scored draft posts and Telegram approval-card previews from product links/CSV")
     p.add_argument("--input", required=True, help="Path to product_links.txt or products.csv")

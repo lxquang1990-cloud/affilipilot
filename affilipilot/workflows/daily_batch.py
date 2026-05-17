@@ -43,7 +43,8 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
         card_path = out_dir / f"{identity.post_id}.telegram.txt"
         post_path = out_dir / f"{identity.post_id}.post.txt"
         media_dir = out_dir / "media" / identity.post_id
-        media_result = prepare_product_media(asdict(product), media_dir)
+        product_dict = asdict(product)
+        media_result = prepare_product_media(product_dict, media_dir)
         card_path.write_text(card, encoding="utf-8")
         post_path.write_text(draft.full_text + "\n", encoding="utf-8")
         post = {
@@ -63,6 +64,8 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
                 "local_path": media_result.local_path,
                 "media_type": media_result.media_type,
                 "reasons": media_result.reasons,
+                "source": product.media_source,
+                "confidence": product.media_confidence,
             },
             "files": {
                 "telegram_card": str(card_path),

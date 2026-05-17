@@ -127,7 +127,7 @@ def _jsonld_products(html_text: str, *, base_url: str, source: str, category: st
                         image_url=_abs_url(str(image), base_url) if image else "",
                         source=source,
                         notes="jsonld",
-                        raw={"parser": "jsonld"},
+                        raw={"parser": "jsonld", "media_source": "jsonld_product_image" if image else "", "media_confidence": "high" if image else ""},
                     ))
                 for value in node.values():
                     if isinstance(value, (dict, list)):
@@ -154,7 +154,7 @@ def _meta_fallback_product(html_text: str, *, base_url: str, source: str, catego
         m = re.search(r"<title[^>]*>(.*?)</title>", html_text, flags=re.I | re.S)
         title = _clean_text(m.group(1)) if m else ""
     if title:
-        return [ProductScanItem(url=base_url, title=title, category=category, image_url=image_url, source=source, notes="meta_fallback", raw={"parser": "meta"})]
+        return [ProductScanItem(url=base_url, title=title, category=category, image_url=image_url, source=source, notes="meta_fallback", raw={"parser": "meta", "media_source": "product_detail_og_image" if image_url else "", "media_confidence": "high" if image_url else ""})]
     return []
 
 
@@ -179,7 +179,7 @@ def _cellphones_product_cards(html_text: str, *, base_url: str, source: str, cat
             image_url=_abs_url(image.group(1), base_url) if image else "",
             source=source,
             notes="cellphones_product_card",
-            raw={"parser": "cellphones_product_card"},
+            raw={"parser": "cellphones_product_card", "media_source": "product_card_image" if image else "", "media_confidence": "high" if image else ""},
         ))
     return items
 
@@ -266,5 +266,10 @@ def scan_result_to_input_lines(scan_json: str | Path, *, max_items: int | None =
             if value not in (None, ""):
                 out_key = "price" if key == "price_vnd" else key
                 parts.append(f"{out_key}={value}")
+        raw = item.get("raw") or {}
+        for key in ("media_source", "media_confidence"):
+            value = raw.get(key)
+            if value:
+                parts.append(f"{key}={value}")
         lines.append(" | ".join(parts))
     return lines
