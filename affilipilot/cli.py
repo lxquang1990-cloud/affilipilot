@@ -262,6 +262,15 @@ def cmd_facebook_plan(args: argparse.Namespace) -> int:
 def cmd_facebook_publish_one(args: argparse.Namespace) -> int:
     from pathlib import Path
     import json
+    if args.require_telegram_sent:
+        if not args.outbox or not args.batch_key:
+            raise SystemExit("Refusing publish: --require-telegram-sent needs --outbox and --batch-key")
+        outbox = Outbox(args.outbox)
+        expected_ids = {f"{args.batch_key}:summary", f"{args.batch_key}:{args.post_id}"}
+        sent_ids = {m.id for m in outbox.load() if m.status == "sent"}
+        missing = sorted(expected_ids - sent_ids)
+        if missing:
+            raise SystemExit("Refusing publish: Telegram approval messages not marked sent: " + ", ".join(missing))
     plan = json.loads(Path(args.plan).read_text(encoding="utf-8"))
     matches = [p for p in plan.get("plans", []) if p.get("post_id") == args.post_id]
     if not matches:
@@ -491,6 +500,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--plan", required=True)
     p.add_argument("--post-id", required=True)
     p.add_argument("--out", default="data/publish/facebook-result.json")
+    p.add_argument("--require-telegram-sent", action="store_true", help="Refuse real publish unless summary and approval card are marked sent in outbox")
+    p.add_argument("--outbox", default="", help="Outbox JSON used with --require-telegram-sent")
+    p.add_argument("--batch-key", default="", help="Batch key used with --require-telegram-sent")
     p.set_defaults(func=cmd_facebook_publish_one)
 
     p = sub.add_parser("facebook-token-check", help="Check Facebook token validity/scopes without printing secrets")
