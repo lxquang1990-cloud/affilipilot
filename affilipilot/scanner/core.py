@@ -158,6 +158,32 @@ def _meta_fallback_product(html_text: str, *, base_url: str, source: str, catego
     return []
 
 
+def _cellphones_product_cards(html_text: str, *, base_url: str, source: str, category: str) -> list[ProductScanItem]:
+    items: list[ProductScanItem] = []
+    card_pattern = re.compile(r'<div class="product-info">(.*?)</div>\s*<div class="bottom-div">', flags=re.I | re.S)
+    for card in card_pattern.findall(html_text):
+        href = re.search(r'<a[^>]+href=["\']([^"\']+)["\']', card, flags=re.I)
+        title = re.search(r'<div class="product__name">\s*<h3>(.*?)</h3>', card, flags=re.I | re.S)
+        price = re.search(r'<p class="product__price--show">(.*?)</p>', card, flags=re.I | re.S)
+        image = re.search(r'<img[^>]+(?:src|data-src|data-lazy-src)=["\']([^"\']+)["\'][^>]+class="product__img"', card, flags=re.I | re.S)
+        if not href or not title:
+            continue
+        name = _clean_text(title.group(1))
+        if not name or name.lower() in {"xem tất cả", "cellphones logo"}:
+            continue
+        items.append(ProductScanItem(
+            url=_abs_url(href.group(1), base_url),
+            title=name,
+            category=category,
+            price_vnd=parse_price_vnd(price.group(1) if price else ""),
+            image_url=_abs_url(image.group(1), base_url) if image else "",
+            source=source,
+            notes="cellphones_product_card",
+            raw={"parser": "cellphones_product_card"},
+        ))
+    return items
+
+
 def _generic_anchor_cards(html_text: str, *, base_url: str, source: str, category: str) -> list[ProductScanItem]:
     items: list[ProductScanItem] = []
     anchor_pattern = re.compile(r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', flags=re.I | re.S)
@@ -200,7 +226,11 @@ def _dedupe_items(items: list[ProductScanItem], *, limit: int | None = None) -> 
 
 def parse_products_from_html(html_text: str, *, page_url: str, source: str = "AUTO", category: str = "unknown", limit: int | None = None) -> list[ProductScanItem]:
     source = (source or "AUTO").upper()
-    items = _jsonld_products(html_text, base_url=page_url, source=source, category=category)
+    items: list[ProductScanItem] = []
+    if source == "CELLPHONES" or "cellphones.com.vn" in page_url:
+        items.extend(_cellphones_product_cards(html_text, base_url=page_url, source=source, category=category))
+    if len(items) < (limit or 1):
+        items.extend(_jsonld_products(html_text, base_url=page_url, source=source, category=category))
     if len(items) < (limit or 1):
         items.extend(_generic_anchor_cards(html_text, base_url=page_url, source=source, category=category))
     if not items:
