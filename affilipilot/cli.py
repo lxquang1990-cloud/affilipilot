@@ -28,6 +28,8 @@ from affilipilot.workflows.run_day import run_day
 from affilipilot.workflows.scan_to_draft import draft_from_scan, run_product_scan
 from affilipilot.scanner.enrich import enrich_batch_media, enrich_product_from_url
 from affilipilot.scanner.browser_plan import build_browser_scan_plan, render_browser_scan_plan
+from affilipilot.scanner.discovery import discover_product_details, write_discovery_result
+from affilipilot.scanner.browser_exec import browser_render_discover
 from affilipilot.quality import evaluate_quality_gate
 
 
@@ -41,6 +43,19 @@ def cmd_scan_products(args: argparse.Namespace) -> int:
     for item in result.get("items", [])[:5]:
         print(f"- {item.get('title') or '(no title)'} | {item.get('price_vnd') or 'price?'} | {item.get('url')}")
     return 0 if result["total"] else 2
+
+
+def cmd_discover_products(args: argparse.Namespace) -> int:
+    result = discover_product_details(args.url, source=args.source, category=args.category, limit=args.limit, timeout=args.timeout, enrich=args.enrich)
+    path = write_discovery_result(result, args.out)
+    print(f"AffiliPilot discover-products: {len(result.items)} items")
+    print(f"Source: {args.source} URL: {args.url}")
+    if result.errors:
+        print("Errors: " + "; ".join(result.errors))
+    print(f"Output JSON: {path}")
+    for item in result.items[:5]:
+        print(f"- {item.title or '(needs enrichment)'} | {item.price_vnd or 'price?'} | {item.url}")
+    return 0 if result.items else 2
 
 
 def cmd_scan_draft(args: argparse.Namespace) -> int:
@@ -92,6 +107,18 @@ def cmd_browser_scan_plan(args: argparse.Namespace) -> int:
     if args.out:
         print(f"Plan JSON: {args.out}")
     return 0
+
+
+def cmd_browser_discover(args: argparse.Namespace) -> int:
+    result = browser_render_discover(args.url, out_path=args.out, source=args.source, category=args.category, limit=args.limit, timeout_ms=args.timeout_ms, wait_ms=args.wait_ms, headless=not args.headed)
+    print(f"AffiliPilot browser-discover: ok={result.ok} total={result.total}")
+    if result.scan_path:
+        print(f"Output JSON: {result.scan_path}")
+    if result.error:
+        print(f"Error: {result.error}")
+    for note in result.notes:
+        print(f"Note: {note}")
+    return 0 if result.ok else 2
 
 
 def cmd_quality_gate(args: argparse.Namespace) -> int:
@@ -405,6 +432,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--timeout", type=int, default=30)
     p.set_defaults(func=cmd_scan_products)
 
+    p = sub.add_parser("discover-products", help="Discover product-detail URLs from category/search HTML; discovery-only, no publish")
+    p.add_argument("--url", required=True)
+    p.add_argument("--out", default="data/scans/discovered-products.json")
+    p.add_argument("--source", default="AUTO")
+    p.add_argument("--category", default="unknown")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--timeout", type=int, default=30)
+    p.add_argument("--enrich", action="store_true", help="Fetch each discovered product detail URL and enrich metadata/media")
+    p.set_defaults(func=cmd_discover_products)
+
     p = sub.add_parser("scan-draft", help="Turn scan JSON into scored drafts and Telegram approval outbox")
     p.add_argument("--scan", required=True, help="Scan JSON from scan-products")
     p.add_argument("--work-dir", default="data/runs/scan-draft")
@@ -438,6 +475,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--source", default="AUTO")
     p.add_argument("--category", default="unknown")
     p.set_defaults(func=cmd_browser_scan_plan)
+
+    p = sub.add_parser("browser-discover", help="Render a dynamic page with Playwright and discover product-detail URLs; discovery-only")
+    p.add_argument("--url", required=True)
+    p.add_argument("--out", default="data/scans/browser-discovered-products.json")
+    p.add_argument("--source", default="AUTO")
+    p.add_argument("--category", default="unknown")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--timeout-ms", type=int, default=45000)
+    p.add_argument("--wait-ms", type=int, default=3000)
+    p.add_argument("--headed", action="store_true")
+    p.set_defaults(func=cmd_browser_discover)
 
     p = sub.add_parser("quality-gate", help="Evaluate product-detail/media/caption quality before publish")
     p.add_argument("--db", default="data/affilipilot.db")
