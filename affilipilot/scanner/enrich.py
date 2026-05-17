@@ -12,7 +12,7 @@ from affilipilot.scanner.core import fetch_html, parse_products_from_html
 
 IMAGE_EXT_RE = re.compile(r'https?://[^"\'\s<>]+?\.(?:jpg|jpeg|png|webp)(?:\?[^"\'\s<>]*)?', re.I)
 PRODUCT_URL_RE = re.compile(r'https?://(?:www\.)?lazada\.vn/products/[^"\'\s<>]+', re.I)
-BAD_IMAGE_HINTS = ("logo", "sprite", "icon", "app-store", "google-play", "avatar", "feedback", "domino")
+BAD_IMAGE_HINTS = ("logo", "sprite", "icon", "app-store", "google-play", "avatar", "feedback", "domino", "/g/tps/", "/ims-web/", "/us/domino/")
 
 
 def _score_image_url(url: str, title: str = "") -> int:
@@ -46,6 +46,7 @@ def harvest_image_urls(html_text: str, *, title: str = "", limit: int = 10) -> l
             continue
         seen.add(key)
         unique.append(url)
+    unique = [url for url in unique if _score_image_url(url, title) > 0]
     unique.sort(key=lambda u: _score_image_url(u, title), reverse=True)
     return unique[:limit]
 

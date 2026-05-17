@@ -13,6 +13,17 @@ AFFILIATE_HOST_HINTS = (
     "s.shopee.vn",
 )
 DEMO_HOST_OR_PATH_HINTS = ("example", "demo", "localhost")
+UNTRUSTED_MEDIA_HINTS = (
+    "/g/tps/",
+    "/ims-web/",
+    "/us/domino/",
+    "app-store",
+    "google-play",
+    "logo",
+    "sprite",
+    "icon",
+    "feedback",
+)
 
 
 @dataclass
@@ -61,6 +72,11 @@ def check_media(post: dict[str, Any]) -> RequirementCheck:
     reasons: list[str] = []
     if not any(str(item).strip() for item in media_candidates):
         reasons.append("missing_product_media")
+    for item in media_candidates:
+        lowered = str(item).lower()
+        if lowered and any(hint in lowered for hint in UNTRUSTED_MEDIA_HINTS):
+            reasons.append("untrusted_product_media")
+            break
     for key in ("image_path", "video_path"):
         value = product.get(key) or files.get(key.replace("_path", ""), "")
         if value and not Path(value).exists():

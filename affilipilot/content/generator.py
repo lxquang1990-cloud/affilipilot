@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from affilipilot.content.compliance import check_mom_baby_compliance, default_affiliate_disclosure
+from urllib.parse import urlparse
+
 from affilipilot.models import ContentDraft, ProductCandidate
 
 
@@ -13,6 +15,19 @@ def _price_hint(product: ProductCandidate) -> str:
         price = f"{product.price_vnd:,}".replace(",", ".")
         return f"Giá tham khảo khoảng {price}đ, có thể thay đổi theo thời điểm."
     return "Giá/ưu đãi có thể thay đổi theo thời điểm, mẹ kiểm tra lại trước khi mua nhé."
+
+
+def _affiliate_hashtag(product: ProductCandidate) -> str:
+    link = product.tracking_url or product.affiliate_url or product.url
+    host = urlparse(link).netloc.lower()
+    text = f"{link} {product.notes}".lower()
+    if "cellphones" in text:
+        return "#CellphoneSAffiliate"
+    if "lazada" in text or "lazada" in host:
+        return "#LazadaAffiliate"
+    if "shopee" in text or "shopee" in host:
+        return "#ShopeeAffiliate"
+    return "#Affiliate"
 
 
 def generate_safe_facebook_draft(product: ProductCandidate) -> ContentDraft:
@@ -36,6 +51,6 @@ def generate_safe_facebook_draft(product: ProductCandidate) -> ContentDraft:
         body = f"Mẹ có thể tham khảo {name}. Trước khi mua, nên kiểm tra kỹ thông tin shop, đánh giá, chất liệu và mức độ phù hợp với bé/nhà mình. {_price_hint(product)}"
 
     cta = "Nếu thấy hợp nhu cầu, mẹ xem chi tiết ở link nhé."
-    disclosure = default_affiliate_disclosure()
+    disclosure = default_affiliate_disclosure() + "\n" + _affiliate_hashtag(product)
     compliance = check_mom_baby_compliance("\n\n".join([hook, body, cta, disclosure]), category=product.category)
     return ContentDraft(product=product, hook=hook, body=body, cta=cta, disclosure=disclosure, compliance=compliance)
