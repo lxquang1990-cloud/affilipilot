@@ -141,3 +141,8 @@ Before any real publish, follow [`first-real-publish-checklist.md`](first-real-p
 ## OpenClaw Telegram bridge
 
 For real Telegram delivery handoff, use the plan-only bridge in [`openclaw-telegram-bridge.md`](openclaw-telegram-bridge.md). It renders `openclaw agent --deliver` commands and does not send automatically.
+
+
+## Facebook token manager
+
+Use [`facebook-token-manager.md`](facebook-token-manager.md) for inspect/exchange/page-token/refresh flows. It never prints token values and cannot renew already-expired user tokens without a fresh OAuth short-lived token.

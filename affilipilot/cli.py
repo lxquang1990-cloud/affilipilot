@@ -11,6 +11,7 @@ from affilipilot.config import load_config, render_config_status
 from affilipilot.publishing.facebook import check_facebook_config, publish_photo_post, publish_post
 from affilipilot.publishing.facebook_plan import plan_facebook_batch, render_facebook_plan
 from affilipilot.publishing.facebook_token import check_facebook_token, render_facebook_token_report
+from affilipilot.publishing.facebook_token_manager import derive_page_token, exchange_short_token, inspect_current_page_token, refresh_from_user_token, render_token_manager_result
 from affilipilot.publishing.ready_package import build_ready_to_post_package
 from affilipilot.readiness import build_readiness_report, render_readiness_report
 from affilipilot.security import write_secret_template
@@ -254,6 +255,21 @@ def cmd_facebook_token_check(args: argparse.Namespace) -> int:
     return 0 if report.valid and not report.missing_scopes and report.page_probe_ok else 2
 
 
+def cmd_facebook_token_manager(args: argparse.Namespace) -> int:
+    if args.action == "inspect":
+        result = inspect_current_page_token()
+    elif args.action == "exchange":
+        result = exchange_short_token(args.short_token or "", write=not args.no_write)
+    elif args.action == "page-token":
+        result = derive_page_token(write=not args.no_write)
+    elif args.action == "refresh":
+        result = refresh_from_user_token(auto=args.auto, threshold_days=args.threshold_days, write=not args.no_write)
+    else:
+        raise SystemExit(f"Unknown token manager action: {args.action}")
+    print(render_token_manager_result(result))
+    return 0 if result.ok else 2
+
+
 def cmd_validate_input(args: argparse.Namespace) -> int:
     validation = validate_affiliate_ready_input(args.input)
     print(render_affiliate_ready_validation(validation))
@@ -422,6 +438,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("facebook-token-check", help="Check Facebook token validity/scopes without printing secrets")
     p.set_defaults(func=cmd_facebook_token_check)
+
+    p = sub.add_parser("facebook-token-manager", help="Inspect/exchange/refresh Facebook user/page tokens without printing secrets")
+    p.add_argument("--action", required=True, choices=["inspect", "exchange", "page-token", "refresh"])
+    p.add_argument("--short-token", default="", help="Short-lived User Token for --action exchange. Prefer env/file input over chat.")
+    p.add_argument("--auto", action="store_true", help="For refresh: skip when user token is not near expiry")
+    p.add_argument("--threshold-days", type=int, default=15, help="Refresh threshold for --auto")
+    p.add_argument("--no-write", action="store_true", help="Dry-run API flow without updating secrets file")
+    p.set_defaults(func=cmd_facebook_token_manager)
 
     p = sub.add_parser("validate-input", help="Validate input has affiliate/tracking link and media before publishing")
     p.add_argument("--input", required=True)

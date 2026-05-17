@@ -128,3 +128,5 @@ Current verification includes:
 - [`docs/first-real-publish-checklist.md`](docs/first-real-publish-checklist.md) — mandatory checklist before first real Facebook publish
 
 - [`docs/openclaw-telegram-bridge.md`](docs/openclaw-telegram-bridge.md) — safe plan-only OpenClaw Telegram delivery handoff
+
+- [`docs/facebook-token-manager.md`](docs/facebook-token-manager.md) — safe Facebook token exchange/refresh flow
