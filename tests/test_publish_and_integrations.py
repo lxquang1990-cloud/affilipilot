@@ -20,8 +20,10 @@ def test_publish_gate_blocks_without_facebook(tmp_path):
 def test_publish_gate_allows_when_all_conditions_true(tmp_path):
     post_file = tmp_path / "post.txt"
     post_file.write_text("Caption\n\nBài viết có chứa link tiếp thị liên kết.", encoding="utf-8")
+    image_file = tmp_path / "product.jpg"
+    image_file.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
     post = {
-        "product": {"url": "https://go.isclix.com/deep_link/abc", "image_url": "https://cdn.example/product.jpg"},
+        "product": {"url": "https://go.isclix.com/deep_link/abc", "image_path": str(image_file)},
         "compliance": {"status": "pass"},
         "files": {"post_text": str(post_file)},
     }
@@ -45,7 +47,9 @@ def test_approve_ready_cli_builds_ready_package_and_plan(tmp_path, monkeypatch, 
     monkeypatch.setenv("FACEBOOK_PAGE_ID", "page")
     monkeypatch.setenv("FACEBOOK_PAGE_ACCESS_TOKEN", "token")
     input_file = tmp_path / "links.txt"
-    input_file.write_text("https://go.isclix.com/deep_link/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/product.jpg", encoding="utf-8")
+    image_file = tmp_path / "product.jpg"
+    image_file.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
+    input_file.write_text(f"https://go.isclix.com/deep_link/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_path={image_file}", encoding="utf-8")
     db_path = tmp_path / "affilipilot.db"
     create_approval_batch(input_file, tmp_path / "drafts", db_path, batch_key="batch", limit=1)
     decide_post(db_path, batch_key="batch", post_id="post_20260516_001", decision="approved")

@@ -23,10 +23,14 @@ def test_demo_happy_path_cli(tmp_path, monkeypatch, capsys):
 
 
 def test_batch_status_summarizes_approvals_and_plan(tmp_path, capsys):
+    image_a = tmp_path / "a.jpg"
+    image_b = tmp_path / "b.jpg"
+    image_a.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
+    image_b.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
     input_file = tmp_path / "links.txt"
     input_file.write_text("\n".join([
-        "https://go.isclix.com/deep_link/product-a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/a.jpg",
-        "https://go.isclix.com/deep_link/product-b | title=Yếm ăn dặm silicone mềm | category=feeding | price=79000 | image_url=https://cdn.example/b.jpg",
+        f"https://go.isclix.com/deep_link/product-a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_path={image_a}",
+        f"https://go.isclix.com/deep_link/product-b | title=Yếm ăn dặm silicone mềm | category=feeding | price=79000 | image_path={image_b}",
     ]), encoding="utf-8")
     db = tmp_path / "db.sqlite"
     create_approval_batch(input_file, tmp_path / "drafts", db, batch_key="batch", limit=2)

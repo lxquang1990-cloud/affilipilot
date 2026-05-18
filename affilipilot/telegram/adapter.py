@@ -8,6 +8,9 @@ from affilipilot.db import AffiliPilotDB
 from affilipilot.telegram.commands import TelegramIntent, help_text, parse_telegram_text
 from affilipilot.telegram.delivery import queue_approval_batch
 from affilipilot.workflows.approval import create_approval_batch, decide_post, render_status
+from affilipilot.workflows.campaign_status import build_campaign_status, render_campaign_status
+from affilipilot.workflows.doctor import build_doctor_report, render_doctor_report
+from affilipilot.workflows.next_action import recommend_next_action, render_next_action
 
 
 @dataclass
@@ -16,6 +19,7 @@ class AdapterConfig:
     work_dir: Path
     limit: int = 5
     outbox_path: Path | None = None
+    publish_dir: Path | None = None
 
 
 @dataclass
@@ -75,6 +79,38 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
         if not batch_key:
             return AdapterResult(command.intent, "No batch found yet.", [])
         return AdapterResult(command.intent, render_status(config.db_path, batch_key=batch_key), [])
+
+    if command.intent == TelegramIntent.CAMPAIGN_STATUS:
+        batch_key = command.args.get("batch_key") or "latest"
+        if batch_key == "latest":
+            batch_key = _latest_batch_key(config.db_path)
+        if not batch_key:
+            return AdapterResult(command.intent, "No batch found yet.", [])
+        outbox_path = config.outbox_path or (config.work_dir / "outbox.json")
+        out_dir = config.publish_dir or (config.work_dir / "publish" / batch_key)
+        status = build_campaign_status(db_path=config.db_path, batch_key=batch_key, outbox_path=outbox_path, out_dir=out_dir)
+        return AdapterResult(command.intent, render_campaign_status(status), [])
+
+    if command.intent == TelegramIntent.NEXT_ACTION:
+        batch_key = command.args.get("batch_key") or "latest"
+        if batch_key == "latest":
+            batch_key = _latest_batch_key(config.db_path)
+        if not batch_key:
+            return AdapterResult(command.intent, "No batch found yet.", [])
+        outbox_path = config.outbox_path or (config.work_dir / "outbox.json")
+        plan_path = (config.publish_dir or (config.work_dir / "publish" / batch_key)) / "facebook-plan.json"
+        result = recommend_next_action(db_path=config.db_path, batch_key=batch_key, outbox_path=outbox_path, plan_path=plan_path)
+        return AdapterResult(command.intent, render_next_action(result), [])
+
+    if command.intent == TelegramIntent.DOCTOR:
+        batch_key = command.args.get("batch_key") or "latest"
+        if batch_key == "latest":
+            batch_key = _latest_batch_key(config.db_path)
+        if not batch_key:
+            return AdapterResult(command.intent, "No batch found yet.", [])
+        outbox_path = config.outbox_path or (config.work_dir / "outbox.json")
+        report = build_doctor_report(db_path=config.db_path, batch_key=batch_key, outbox_path=outbox_path)
+        return AdapterResult(command.intent, render_doctor_report(report), [])
 
     if command.intent in {TelegramIntent.APPROVE, TelegramIntent.REJECT, TelegramIntent.NEEDS_EDIT, TelegramIntent.BLACKLIST}:
         batch_key = _latest_batch_key(config.db_path)

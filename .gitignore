@@ -14,7 +14,8 @@ htmlcov/
 data/**/*.db
 data/**/*.sqlite
 data/outbox/*.json
-data/publish/*-result.json
+data/publish/*.json
+data/scans/
 data/runs/
 data/bridge-smoke/
 data/smoke-happy-path/

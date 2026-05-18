@@ -19,7 +19,7 @@ Implemented:
 - media gate
 - SQLite approval state
 - Telegram command parser/mock adapter
-- local Telegram outbox and delivery dry-run
+- local Telegram outbox and delivery dry-run/proof statuses
 - ready-to-post package
 - Facebook publish gate
 - Facebook dry-run planner
@@ -81,7 +81,9 @@ readiness          Show integration readiness gates
 draft-links        Links -> drafts -> approval batch -> local outbox
 handle-text        Simulate Telegram text input
 outbox             Render local pending outbox messages
-deliver-telegram   Dry-run local delivery / mark sent
+deliver-telegram   Dry-run local delivery / mark sent or delivered with receipt
+mark-batch-delivered Mark summary + selected approval card delivered with receipt
+openclaw-telegram-send Send pending outbox via OpenClaw CLI; delivered only with receipt
 status             Approval-only status
 decide             Approve/reject/edit/blacklist a post
 approve-ready      Ready package + Facebook dry-run plan
@@ -90,13 +92,19 @@ demo-happy-path    Deterministic end-to-end local smoke
 facebook-plan      Build Facebook dry-run plan
 facebook-token-check Check Facebook token/scopes without printing secrets
 facebook-publish-one Guarded real publish for exactly one dry-run publishable post
+publish-safe       Validate approval + delivery proof + dry-run plan before optional publish
+ready-to-publish   Build ready package + Facebook plan + publish-safe status; no publish
+next-action        Recommend exact next operator step for a batch; no publish
+doctor             Read-only audit of config, DB, batch, and outbox; no external APIs
+campaign-status    One-screen dashboard: doctor + next-action + ready summary; no publish
 accesstrade-convert Convert links to Accesstrade tracking links; dry-run by default
 ```
 
 ## Safety guarantees
 
 - `draft-links`, `handle-text`, `deliver-telegram`, `approve-ready`, `batch-status`, and `demo-happy-path` do not publish to Facebook.
-- `deliver-telegram` does not call Telegram APIs; it renders/marks local outbox only.
+- `deliver-telegram` does not call Telegram APIs; it renders/marks local outbox only. Production publish requires `delivered` proof with a receipt, not merely `sent`.
+- `openclaw-telegram-send` uses OpenClaw CLI delivery with safety default `--limit 1`; it marks `delivered` only when a receipt/message id is returned, otherwise only `sent`.
 - Real Accesstrade conversion requires `accesstrade-convert --real`.
 - Real Facebook publish is only through `facebook-publish-one`, and it refuses plans that are not `publishable_dry_run`.
 - Secrets should live outside chat/history, e.g. `/home/snail/.openclaw/workspace/secrets/affilipilot.env` with chmod `600`.
@@ -121,9 +129,15 @@ Current verification includes:
 - [`docs/compliance-policy-mom-baby.md`](docs/compliance-policy-mom-baby.md)
 - [`docs/tracking-strategy.md`](docs/tracking-strategy.md)
 - [`docs/publish-gate.md`](docs/publish-gate.md)
+- [`docs/publish-safe.md`](docs/publish-safe.md)
+- [`docs/ready-to-publish.md`](docs/ready-to-publish.md)
+- [`docs/next-action.md`](docs/next-action.md)
+- [`docs/doctor.md`](docs/doctor.md)
+- [`docs/campaign-status.md`](docs/campaign-status.md)
 - [`docs/facebook-dry-run-plan.md`](docs/facebook-dry-run-plan.md)
 - [`docs/accesstrade-link-creator.md`](docs/accesstrade-link-creator.md)
 - [`docs/telegram-delivery.md`](docs/telegram-delivery.md)
+- [`docs/telegram-commands.md`](docs/telegram-commands.md)
 
 - [`docs/first-real-publish-checklist.md`](docs/first-real-publish-checklist.md) — mandatory checklist before first real Facebook publish
 

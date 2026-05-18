@@ -17,6 +17,8 @@ class OutboxMessage:
     attachments: list[str] = field(default_factory=list)
     status: str = "pending"
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    delivered_at: str = ""
+    receipt: str = ""
 
 
 class Outbox:
@@ -41,12 +43,19 @@ class Outbox:
     def pending(self) -> list[OutboxMessage]:
         return [m for m in self.load() if m.status == "pending"]
 
-    def mark(self, message_id: str, status: str) -> None:
+    def mark(self, message_id: str, status: str, *, receipt: str = "") -> None:
+        if status not in {"pending", "sent", "delivered", "failed", "skipped"}:
+            raise ValueError(f"Unsupported outbox status: {status}")
+        if status == "delivered" and not receipt:
+            raise ValueError("delivered status requires receipt")
         messages = self.load()
         found = False
         for m in messages:
             if m.id == message_id:
                 m.status = status
+                if status == "delivered":
+                    m.receipt = receipt
+                    m.delivered_at = datetime.now(timezone.utc).isoformat()
                 found = True
                 break
         if not found:

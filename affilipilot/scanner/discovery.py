@@ -58,6 +58,30 @@ def _lazada_product_links_from_text(text: str, base_url: str) -> list[str]:
     return sorted(links)
 
 
+def _normalize_product_url(url: str) -> str:
+    parsed = urlparse(url)
+    return parsed._replace(query="", fragment="").geturl().rstrip("/")
+
+
+def _item_score(item: ProductScanItem) -> int:
+    return (30 if item.title else 0) + (20 if item.image_url else 0) + (10 if item.price_vnd else 0)
+
+
+def _dedupe_discovered_items(items: list[ProductScanItem], *, limit: int | None = None) -> list[ProductScanItem]:
+    best: dict[str, ProductScanItem] = {}
+    order: list[str] = []
+    for item in items:
+        key = _normalize_product_url(item.url)
+        if key not in best:
+            best[key] = item
+            order.append(key)
+            continue
+        if _item_score(item) > _item_score(best[key]):
+            best[key] = item
+    out = [best[key] for key in order]
+    return out[:limit] if limit else out
+
+
 def _card_product_items(html_text: str, *, base_url: str, source: str, category: str, limit: int | None = None) -> list[ProductScanItem]:
     items: list[ProductScanItem] = []
     anchor_pattern = re.compile(r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', flags=re.I | re.S)
@@ -73,12 +97,14 @@ def _card_product_items(html_text: str, *, base_url: str, source: str, category:
         img = re.search(r'<img[^>]+(?:src|data-src|data-lazy-src)=["\']([^"\']+)["\']', body, flags=re.I)
         if img:
             image = _abs_url(img.group(1), base_url)
+            if image.lower().startswith("data:"):
+                image = ""
         price = None
         price_match = re.search(r'([0-9][0-9\.]{3,}\s*đ)', body, flags=re.I)
         if price_match:
             price = parse_price_vnd(price_match.group(1))
         items.append(ProductScanItem(
-            url=url,
+            url=_normalize_product_url(url),
             title=text[:180],
             category=category,
             price_vnd=price,
@@ -87,21 +113,20 @@ def _card_product_items(html_text: str, *, base_url: str, source: str, category:
             notes="product_card_discovery",
             raw={"parser": "product_card_discovery", "media_source": "product_card_image" if image else "", "media_confidence": "high" if image else ""},
         ))
-        if limit and len(items) >= limit:
-            break
-    return items
+    return _dedupe_discovered_items(items, limit=limit)
 
 
 def discover_product_details_from_html(html_text: str, *, page_url: str, source: str = "AUTO", category: str = "unknown", limit: int = 10) -> DiscoveryResult:
     source = (source or "AUTO").upper()
     items = _card_product_items(html_text, base_url=page_url, source=source, category=category, limit=limit)
-    seen = {item.url for item in items}
+    seen = {_normalize_product_url(item.url) for item in items}
     if len(items) < limit:
         for url in _lazada_product_links_from_text(html_text, page_url):
-            if url in seen or not is_product_detail_url(url):
+            normalized = _normalize_product_url(url)
+            if normalized in seen or not is_product_detail_url(normalized):
                 continue
-            items.append(ProductScanItem(url=url, title="", category=category, source=source, notes="product_url_discovery", raw={"parser": "product_url_discovery"}))
-            seen.add(url)
+            items.append(ProductScanItem(url=normalized, title="", category=category, source=source, notes="product_url_discovery", raw={"parser": "product_url_discovery"}))
+            seen.add(normalized)
             if len(items) >= limit:
                 break
     return DiscoveryResult(source_url=page_url, source=source, category=category, discovered_at=datetime.now(timezone.utc).isoformat(), items=items)

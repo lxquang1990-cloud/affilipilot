@@ -21,14 +21,29 @@ def test_facebook_plan_blocks_without_approval(tmp_path):
 
 
 def test_facebook_plan_publishable_after_approval(tmp_path):
+    image_file = tmp_path / "product.jpg"
+    image_file.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
     input_file = tmp_path / "links.txt"
-    input_file.write_text("https://go.isclix.com/deep_link/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/product.jpg", encoding="utf-8")
+    input_file.write_text(f"https://go.isclix.com/deep_link/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_path={image_file}", encoding="utf-8")
     db = tmp_path / "db.sqlite"
     create_approval_batch(input_file, tmp_path / "drafts", db, batch_key="batch", limit=1)
     decide_post(db, batch_key="batch", post_id="post_20260516_001", decision="approved")
     plan = plan_facebook_batch(db, batch_key="batch", out_path=tmp_path / "plan.json", config=FacebookConfig(page_id="page", page_access_token="token"))
     rendered = render_facebook_plan(plan)
     assert plan.publishable_count == 1
-    assert plan.plans[0].endpoint == "/page/feed"
+    assert plan.plans[0].endpoint == "/page/photos"
     assert "would POST" in rendered
     assert (tmp_path / "plan.json").exists()
+
+def test_facebook_plan_blocks_market_fit_before_publish_safe(tmp_path):
+    image_file = tmp_path / "product.jpg"
+    image_file.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
+    input_file = tmp_path / "links.txt"
+    input_file.write_text(f"https://go.isclix.com/deep_link/a | title=Samsung Galaxy S26 Ultra | category=electronics | price=30490000 | image_path={image_file} | original_url=https://cellphones.com.vn/dien-thoai-samsung-galaxy-s26-ultra.html | media_source=product_card_image | media_confidence=high", encoding="utf-8")
+    db = tmp_path / "db.sqlite"
+    create_approval_batch(input_file, tmp_path / "drafts", db, batch_key="batch", limit=1)
+    (tmp_path / "drafts" / "post_20260516_001.post.txt").write_text("Một gợi ý nhỏ cho mẹ đang tìm đồ tiện dùng trong sinh hoạt hằng ngày với bé. Samsung Galaxy S26 Ultra. Bài viết có chứa link tiếp thị liên kết. #CellphoneSAffiliate", encoding="utf-8")
+    decide_post(db, batch_key="batch", post_id="post_20260516_001", decision="approved")
+    plan = plan_facebook_batch(db, batch_key="batch", out_path=tmp_path / "plan.json", config=FacebookConfig(page_id="page", page_access_token="token"))
+    assert plan.publishable_count == 0
+    assert any(reason.startswith("market_fit:") for reason in plan.plans[0].reasons)

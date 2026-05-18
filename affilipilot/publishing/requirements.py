@@ -12,7 +12,7 @@ AFFILIATE_HOST_HINTS = (
     "shorten.asia",
     "s.shopee.vn",
 )
-DEMO_HOST_OR_PATH_HINTS = ("example", "demo", "localhost")
+DEMO_HOST_OR_PATH_HINTS = ("example", "demo", "localhost", "test-safe", "/test", "test-")
 UNTRUSTED_MEDIA_HINTS = (
     "/g/tps/",
     "/ims-web/",
@@ -60,23 +60,34 @@ def check_affiliate_link(post: dict[str, Any]) -> RequirementCheck:
 def check_media(post: dict[str, Any]) -> RequirementCheck:
     product = post.get("product", {})
     files = post.get("files", {})
-    media_candidates = [
+    media = post.get("media", {})
+    remote_candidates = [
         product.get("image_url", ""),
-        product.get("image_path", ""),
         product.get("video_url", ""),
+    ]
+    local_candidates = [
+        product.get("image_path", ""),
         product.get("video_path", ""),
         files.get("image", ""),
         files.get("video", ""),
-        post.get("media", {}).get("local_path", ""),
+        media.get("local_path", ""),
     ]
     reasons: list[str] = []
-    if not any(str(item).strip() for item in media_candidates):
+    all_candidates = remote_candidates + local_candidates
+    if not any(str(item).strip() for item in all_candidates):
         reasons.append("missing_product_media")
-    for item in media_candidates:
+    for item in all_candidates:
         lowered = str(item).lower()
         if lowered and any(hint in lowered for hint in UNTRUSTED_MEDIA_HINTS):
             reasons.append("untrusted_product_media")
             break
+
+    existing_local = [str(item) for item in local_candidates if str(item).strip() and Path(str(item)).exists()]
+    if not existing_local:
+        if any(str(item).strip() for item in remote_candidates):
+            reasons.append("media_not_downloaded")
+        else:
+            reasons.append("missing_local_media")
     for key in ("image_path", "video_path"):
         value = product.get(key) or files.get(key.replace("_path", ""), "")
         if value and not Path(value).exists():

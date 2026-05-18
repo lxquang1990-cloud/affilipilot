@@ -11,7 +11,7 @@ def test_parse_raw_links_as_create_batch():
 
 
 def test_parse_approval_command():
-    parsed = parse_telegram_text("/approve post_20260516_001 ok")
+    parsed = parse_telegram_text("/aff_approve post_20260516_001 ok")
     assert parsed.intent == TelegramIntent.APPROVE
     assert parsed.args["post_id"] == "post_20260516_001"
 
@@ -26,7 +26,7 @@ def test_adapter_create_status_and_approve(tmp_path):
     status = handle_text_message("/status", config)
     assert "pending" in status.text
 
-    approve = handle_text_message("/approve post_20260516_001 ok", config)
+    approve = handle_text_message("/aff_approve post_20260516_001 ok", config)
     assert "approved" in approve.text
 
 

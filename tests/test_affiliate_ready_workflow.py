@@ -11,8 +11,10 @@ def test_validate_affiliate_ready_input_blocks_plain_link(tmp_path):
 
 
 def test_validate_affiliate_ready_input_passes_tracking_and_media(tmp_path):
+    image_file = tmp_path / "product.jpg"
+    image_file.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
     f = tmp_path / "links.txt"
-    f.write_text("https://go.isclix.com/a | title=A | image_url=https://cdn.example/a.jpg", encoding="utf-8")
+    f.write_text(f"https://go.isclix.com/a | title=A | image_path={image_file}", encoding="utf-8")
     result = validate_affiliate_ready_input(f)
     assert result.passed
     assert result.passed_count == 1

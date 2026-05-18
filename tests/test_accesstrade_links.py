@@ -53,7 +53,7 @@ def test_load_campaigns_from_env_values_with_legacy():
 
 def test_convert_and_write_input(tmp_path):
     f = tmp_path / "links.txt"
-    f.write_text("https://shopee.vn/a | title=A | image_url=https://cdn.example/a.jpg", encoding="utf-8")
+    f.write_text("https://example.com/a?aff=1 | title=A | image_url=https://cdn.example/a.jpg", encoding="utf-8")
     out = tmp_path / "converted.json"
     summary = convert_input_links(f, out, dry_run=True)
     assert summary["total"] == 1
@@ -61,3 +61,27 @@ def test_convert_and_write_input(tmp_path):
     text = converted.read_text(encoding="utf-8")
     assert "title=A" in text
     assert "image_url=https://cdn.example/a.jpg" in text
+
+
+def test_convert_blocks_lazada_channel_before_accesstrade(tmp_path):
+    f = tmp_path / "links.txt"
+    f.write_text("https://www.lazada.vn/tag/khan-sua-em-be/ | title=Khăn sữa | category=baby_care", encoding="utf-8")
+    out = tmp_path / "converted.json"
+    summary = convert_input_links(f, out, dry_run=False, campaign_key="LAZADA")
+    assert summary["ok_count"] == 0
+    assert summary["failed_count"] == 1
+    item = summary["items"][0]
+    assert item["preflight"]["classification"]["kind"] == "tag"
+    assert item["result"]["error"] == "marketplace_preflight_block:LAZADA:tag"
+    converted = write_converted_input(out, tmp_path / "converted.txt")
+    assert converted.read_text(encoding="utf-8") == ""
+
+
+def test_convert_blocks_shopee_shortlink_until_resolved(tmp_path):
+    f = tmp_path / "links.txt"
+    f.write_text("https://s.shopee.vn/abc123 | title=Short", encoding="utf-8")
+    out = tmp_path / "converted.json"
+    summary = convert_input_links(f, out, dry_run=False, campaign_key="SHOPEE")
+    assert summary["failed_count"] == 1
+    assert summary["items"][0]["preflight"]["classification"]["kind"] == "shortlink"
+    assert summary["items"][0]["result"]["error"] == "marketplace_preflight_block:SHOPEE:shortlink"

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from affilipilot.models import ProductCandidate
+from affilipilot.quality import is_product_detail_url
 
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; AffiliPilot/1.0; +https://github.com/lxquang1990-cloud/affilipilot)",
@@ -184,7 +185,7 @@ def _cellphones_product_cards(html_text: str, *, base_url: str, source: str, cat
     return items
 
 
-def _generic_anchor_cards(html_text: str, *, base_url: str, source: str, category: str) -> list[ProductScanItem]:
+def _generic_anchor_cards(html_text: str, *, base_url: str, source: str, category: str, product_detail_only: bool = False) -> list[ProductScanItem]:
     items: list[ProductScanItem] = []
     anchor_pattern = re.compile(r'<a\b[^>]*href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', flags=re.I | re.S)
     for href, body in anchor_pattern.findall(html_text):
@@ -197,6 +198,8 @@ def _generic_anchor_cards(html_text: str, *, base_url: str, source: str, categor
         url = _abs_url(href, base_url)
         parsed = urllib.parse.urlparse(url)
         if not parsed.scheme.startswith("http"):
+            continue
+        if product_detail_only and not is_product_detail_url(url):
             continue
         image = ""
         img = re.search(r'<img[^>]+(?:src|data-src|data-lazy-src)=["\']([^"\']+)["\']', body, flags=re.I)
@@ -224,16 +227,30 @@ def _dedupe_items(items: list[ProductScanItem], *, limit: int | None = None) -> 
     return out
 
 
+def _is_lazada_channel_or_listing_url(page_url: str) -> bool:
+    parsed = urllib.parse.urlparse(page_url)
+    host = parsed.netloc.lower()
+    path = parsed.path.lower()
+    return "lazada.vn" in host and not is_product_detail_url(page_url) and (
+        path.startswith("/tag/")
+        or path.startswith("/shop/")
+        or path.startswith("/catalog/")
+        or path in {"/", ""}
+        or "lazada.vn" in host
+    )
+
+
 def parse_products_from_html(html_text: str, *, page_url: str, source: str = "AUTO", category: str = "unknown", limit: int | None = None) -> list[ProductScanItem]:
     source = (source or "AUTO").upper()
     items: list[ProductScanItem] = []
+    lazada_listing = _is_lazada_channel_or_listing_url(page_url) or source == "LAZADA"
     if source == "CELLPHONES" or "cellphones.com.vn" in page_url:
         items.extend(_cellphones_product_cards(html_text, base_url=page_url, source=source, category=category))
     if len(items) < (limit or 1):
         items.extend(_jsonld_products(html_text, base_url=page_url, source=source, category=category))
     if len(items) < (limit or 1):
-        items.extend(_generic_anchor_cards(html_text, base_url=page_url, source=source, category=category))
-    if not items:
+        items.extend(_generic_anchor_cards(html_text, base_url=page_url, source=source, category=category, product_detail_only=lazada_listing))
+    if not items and not lazada_listing:
         items.extend(_meta_fallback_product(html_text, base_url=page_url, source=source, category=category))
     return _dedupe_items(items, limit=limit)
 

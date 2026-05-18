@@ -60,4 +60,4 @@ def check_mom_baby_compliance(text: str, *, category: str = "unknown") -> Compli
 
 
 def default_affiliate_disclosure() -> str:
-    return "Bài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ mà không làm thay đổi giá mua của bạn.\n#tiepthilienket"
+    return "Bài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ mà không làm thay đổi giá mua của bạn."

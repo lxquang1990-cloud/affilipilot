@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from affilipilot.content.product_quality import evaluate_product_content
 from affilipilot.publishing.requirements import check_affiliate_link, check_media
 
 PRODUCT_DETAIL_HINTS = (
@@ -93,10 +94,40 @@ def evaluate_quality_gate(post: dict[str, Any]) -> QualityGateResult:
 
     if "#shopeeaffiliate" in text.lower() and "lazada" in (source_url + " " + product.get("notes", "") + " " + product.get("url", "")).lower():
         reasons.append("wrong_campaign_hashtag")
-    if "tiếp thị liên kết" not in text.lower() and "hoa hồng" not in text.lower():
+    lower_text = text.lower()
+    category = str(product.get("category", "")).lower()
+    title = str(product.get("title", "")).lower()
+    if "tiếp thị liên kết" not in lower_text and "hoa hồng" not in lower_text:
         reasons.append("missing_affiliate_disclosure")
     if len(text.strip()) < 120:
         reasons.append("caption_too_short")
+    spammy_phrases = (
+        "đừng chỉ nhìn giá",
+        "nhu cầu, ngân sách và bối cảnh",
+        "so sánh cấu hình/màu",
+    )
+    if any(phrase in lower_text for phrase in spammy_phrases):
+        reasons.append("spammy_generic_affiliate_template")
+    if "#tiepthilienket" in lower_text:
+        reasons.append("internal_hashtag_primary")
+    if category == "baby_care" and any(term in title for term in ("khăn", "khan")):
+        baby_care_terms = ("mềm", "cotton", "muslin", "sợi tre", "thấm", "bụi vải", "giặt", "da bé", "lau")
+        if not any(term in lower_text for term in baby_care_terms):
+            reasons.append("missing_baby_care_benefit_angle")
+        if "cấu hình" in lower_text or "bảo hành" in lower_text:
+            reasons.append("wrong_category_tech_language")
+    product_content = evaluate_product_content(product, text)
+    if not product_content.passed:
+        reasons.extend(product_content.reasons)
+
+    if category in {"electronics", "phone", "smartphone"} or any(term in title for term in ("samsung", "iphone", "galaxy", "xiaomi", "điện thoại")):
+        if "đồ tiện dùng trong sinh hoạt hằng ngày với bé" in lower_text:
+            reasons.append("audience_product_mismatch")
+        benefit_terms = ("camera", "chụp", "ảnh", "video", "pin", "bộ nhớ", "bảo hành", "cấu hình", "màu")
+        if not any(term in lower_text for term in benefit_terms):
+            reasons.append("missing_electronics_benefit_angle")
+        if "#cellphonesaffiliate" in lower_text or "#tiepthilienket" in lower_text:
+            reasons.append("internal_hashtag_primary")
 
     media_score = 100
     if any(r.startswith("missing_product_media") or r.startswith("untrusted_product_media") for r in reasons):
@@ -110,6 +141,12 @@ def evaluate_quality_gate(post: dict[str, Any]) -> QualityGateResult:
     if "missing_affiliate_disclosure" in reasons:
         caption_score -= 50
     if "caption_too_short" in reasons:
+        caption_score -= 20
+    if "audience_product_mismatch" in reasons:
+        caption_score -= 60
+    if "missing_electronics_benefit_angle" in reasons:
+        caption_score -= 40
+    if "internal_hashtag_primary" in reasons:
         caption_score -= 20
     caption_score = max(0, caption_score)
 

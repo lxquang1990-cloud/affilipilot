@@ -1,17 +1,13 @@
 # OpenClaw Telegram Bridge
 
-AffiliPilot does not call Telegram Bot API directly. Real delivery should go through OpenClaw's channel delivery path so provider secrets stay inside OpenClaw config/runtime.
+AffiliPilot does not handle Telegram bot tokens. Delivery goes through OpenClaw's configured channel path so provider secrets stay inside OpenClaw config/runtime.
 
-The safe bridge is currently **plan-only**: AffiliPilot renders reviewable `openclaw agent --deliver` commands from the local outbox. Operators can inspect and run one command at a time.
+There are two bridge modes:
 
-## Why plan-only
+1. `openclaw-telegram-plan` — review commands only, no send.
+2. `openclaw-telegram-send` — execute OpenClaw CLI delivery for pending outbox messages.
 
-- Avoid accidental Telegram spam.
-- Avoid putting bot tokens in command history, logs, or chat.
-- Preserve idempotency: outbox messages are not marked `sent` until the operator decides.
-- Keep AffiliPilot independent from OpenClaw internal provider config details.
-
-## Build a delivery plan
+## Plan-only mode
 
 ```bash
 python3 -m affilipilot openclaw-telegram-plan \
@@ -20,36 +16,42 @@ python3 -m affilipilot openclaw-telegram-plan \
   --limit 1
 ```
 
-The command prints one or more shell commands like:
+This prints reviewable `openclaw agent --deliver` commands.
+
+## Send mode
 
 ```bash
-openclaw agent --message '<approval card text>' --deliver --reply-channel telegram --reply-to 640968010
-```
-
-Review each command before running it.
-
-## After manual delivery
-
-Once the operator confirms a message was delivered, mark it locally:
-
-```bash
-python3 -m affilipilot mark-outbox \
+python3 -m affilipilot openclaw-telegram-send \
   --outbox data/outbox/manual-001.json \
-  --message-id '<batch-key>:summary' \
-  --status sent
+  --reply-to 640968010 \
+  --limit 1
 ```
 
-## Future direct bridge requirements
+Safety defaults:
 
-Before implementing automatic execution, add all of these safeguards:
+- `--limit` defaults to `1`.
+- Message is marked `sent` only after OpenClaw exits with code `0`.
+- Message is marked `delivered` only when OpenClaw output contains JSON with one of:
+  - `receipt`
+  - `message_id`
+  - `id`
+- If no receipt/message id exists, publish gate remains blocked because `sent` is not enough.
+- On CLI error, message is marked `failed`.
+- Tokens and provider config are never printed.
 
-- explicit `--send` flag, default off
-- `--limit` required or default to 1
-- OpenClaw CLI availability check
-- delivery result capture as JSON under `data/outbox/results/`
-- retry policy with backoff and no duplicate sends
-- mark `sent` only after OpenClaw confirms delivery
-- never print provider tokens or raw OpenClaw config
-- tests with mocked subprocess, no real Telegram send
+Expected receipt format after message id capture:
 
-Until then, `openclaw-telegram-plan` remains a reviewable handoff, not a sender.
+```text
+telegram:<chat_id>:<message_id>
+```
+
+## Publish gate reminder
+
+Real Facebook publish still requires `publish-safe` to pass:
+
+- operator approval is `approved`
+- summary + selected approval card are `delivered`
+- both delivered messages have receipts
+- Facebook dry-run plan says `publishable_dry_run`
+
+`openclaw-telegram-send` alone never publishes to Facebook.

@@ -5,7 +5,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from affilipilot.content.market_fit import evaluate_market_fit
 from affilipilot.db import AffiliPilotDB
+from affilipilot.offer import validate_offer
 from affilipilot.publishing.facebook import FacebookConfig, check_facebook_config
 from affilipilot.publishing.gate import evaluate_publish_gate
 from affilipilot.quality import evaluate_quality_gate
@@ -74,12 +76,17 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
             dry_run_passed=bool(text),
         )
         quality = evaluate_quality_gate(post)
+        market_fit = evaluate_market_fit(post.get("product", {}), text)
+        offer_url = post.get("product", {}).get("tracking_url") or post.get("product", {}).get("affiliate_url") or post.get("product", {}).get("url", "")
+        offer = validate_offer(offer_url, expected_title=post.get("product", {}).get("title", ""), network=False)
         reasons = list(gate.reasons) + [reason for reason in quality.reasons if reason not in gate.reasons]
+        reasons.extend(f"market_fit:{reason}" for reason in market_fit.reasons if f"market_fit:{reason}" not in reasons)
+        reasons.extend(f"offer:{reason}" for reason in offer.reasons if f"offer:{reason}" not in reasons)
         if text in seen_texts and text:
             reasons.append("duplicate_text")
         seen_texts.add(text)
 
-        if gate.allowed and quality.passed and "duplicate_text" not in reasons:
+        if gate.allowed and quality.passed and market_fit.passed and offer.passed and "duplicate_text" not in reasons:
             graph = build_graph_payload(page_id=config.page_id, message=text, link=_post_link(post), image_path=post.get("files", {}).get("image", ""))
             plans.append(FacebookPostPlan(
                 post_id=post_id,

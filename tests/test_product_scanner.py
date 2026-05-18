@@ -57,3 +57,26 @@ def test_scan_products_cli_with_file_url_monkeypatch(tmp_path, monkeypatch, caps
     assert "AffiliPilot scan-products: 2 items" in out
     data = json.loads((tmp_path / "scan.json").read_text(encoding="utf-8"))
     assert data["total"] == 2
+
+
+def test_lazada_channel_scan_filters_navigation_links():
+    html = """
+    <a href="https://sellercenter.lazada.vn/apps/register/index">BÁN HÀNG CÙNG LAZADA</a>
+    <a href="https://helpcenter.lazada.vn/s/faq">Trung tâm hỗ trợ</a>
+    <a href="https://www.lazada.vn/tag/khan-sua-em-be/">Khăn sữa em bé</a>
+    <a href="https://www.lazada.vn/products/khan-sua-cotton-i123-s456.html"><img src="https://img.lazcdn.com/product/khan.jpg" alt="Khăn sữa cotton mềm"/> 69.000đ</a>
+    """
+    items = parse_products_from_html(html, page_url="https://www.lazada.vn/tag/khan-sua-em-be/", source="LAZADA", category="baby_care", limit=5)
+    assert len(items) == 1
+    assert items[0].url == "https://www.lazada.vn/products/khan-sua-cotton-i123-s456.html"
+    assert items[0].title == "Khăn sữa cotton mềm"
+    assert items[0].price_vnd == 69000
+
+
+def test_lazada_channel_scan_does_not_meta_fallback_to_channel_page():
+    html = """
+    <html><head><title>Khăn sữa em bé giá tốt | Lazada</title><meta property="og:image" content="https://lazada.vn/logo.png"></head>
+    <body><a href="https://helpcenter.lazada.vn/s/faq">Trung tâm hỗ trợ</a></body></html>
+    """
+    items = parse_products_from_html(html, page_url="https://www.lazada.vn/tag/khan-sua-em-be/", source="LAZADA", category="baby_care", limit=5)
+    assert items == []

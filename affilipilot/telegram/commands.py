@@ -7,6 +7,9 @@ from enum import Enum
 class TelegramIntent(str, Enum):
     HELP = "help"
     STATUS = "status"
+    CAMPAIGN_STATUS = "campaign_status"
+    NEXT_ACTION = "next_action"
+    DOCTOR = "doctor"
     CREATE_BATCH = "create_batch"
     APPROVE = "approve"
     REJECT = "reject"
@@ -37,13 +40,19 @@ def parse_telegram_text(text: str) -> ParsedCommand:
         return ParsedCommand(TelegramIntent.HELP, {}, raw)
     if cmd == "/status":
         return ParsedCommand(TelegramIntent.STATUS, {"batch_key": parts[1] if len(parts) > 1 else "latest"}, raw)
-    if cmd in {"/approve", "/ok"} and len(parts) >= 2:
+    if cmd in {"/campaign_status", "/campaign-status", "/campaign"}:
+        return ParsedCommand(TelegramIntent.CAMPAIGN_STATUS, {"batch_key": parts[1] if len(parts) > 1 else "latest"}, raw)
+    if cmd in {"/next_action", "/next-action", "/next"}:
+        return ParsedCommand(TelegramIntent.NEXT_ACTION, {"batch_key": parts[1] if len(parts) > 1 else "latest"}, raw)
+    if cmd == "/doctor":
+        return ParsedCommand(TelegramIntent.DOCTOR, {"batch_key": parts[1] if len(parts) > 1 else "latest"}, raw)
+    if cmd in {"/aff_approve", "/ap_approve", "/ok_aff"} and len(parts) >= 2:
         return ParsedCommand(TelegramIntent.APPROVE, {"post_id": parts[1], "reason": " ".join(parts[2:])}, raw)
-    if cmd in {"/reject", "/no"} and len(parts) >= 2:
+    if cmd in {"/aff_reject", "/ap_reject", "/no_aff"} and len(parts) >= 2:
         return ParsedCommand(TelegramIntent.REJECT, {"post_id": parts[1], "reason": " ".join(parts[2:])}, raw)
-    if cmd in {"/edit", "/needs_edit"} and len(parts) >= 2:
+    if cmd in {"/aff_edit", "/ap_edit", "/aff_needs_edit"} and len(parts) >= 2:
         return ParsedCommand(TelegramIntent.NEEDS_EDIT, {"post_id": parts[1], "reason": " ".join(parts[2:])}, raw)
-    if cmd in {"/blacklist", "/ban"} and len(parts) >= 2:
+    if cmd in {"/aff_blacklist", "/ap_blacklist", "/aff_ban"} and len(parts) >= 2:
         return ParsedCommand(TelegramIntent.BLACKLIST, {"post_id": parts[1], "reason": " ".join(parts[2:])}, raw)
     if cmd == "/batch":
         body = raw.split("\n", 1)[1] if "\n" in raw else ""
@@ -61,8 +70,11 @@ def help_text() -> str:
         "Or use:",
         "/batch <links> — create approval batch",
         "/status [batch_key] — show approval status",
-        "/approve <post_id> [reason]",
-        "/reject <post_id> [reason]",
-        "/edit <post_id> [reason]",
-        "/blacklist <post_id> [reason]",
+        "/campaign_status [batch_key] — one-screen campaign dashboard",
+        "/next_action [batch_key] — show exact next operator step",
+        "/doctor [batch_key] — read-only system/batch audit",
+        "/aff_approve <post_id> [reason]",
+        "/aff_reject <post_id> [reason]",
+        "/aff_edit <post_id> [reason]",
+        "/aff_blacklist <post_id> [reason]",
     ])
