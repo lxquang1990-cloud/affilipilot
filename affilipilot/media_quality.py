@@ -8,6 +8,16 @@ from urllib.parse import urlparse, urlunparse
 MIN_IMAGE_WIDTH = 600
 MIN_IMAGE_HEIGHT = 600
 THUMBNAIL_HINTS = ("_80x80", "_120x120", "_200x200", "_300x300")
+BAD_MEDIA_NAME_HINTS = (
+    "ios_splash_screen",
+    "android_splash",
+    "splash_screen",
+    "shopee-mobilemall",
+    "app-store",
+    "google-play",
+    "logo",
+    "icon",
+)
 
 @dataclass
 class MediaQualityResult:
@@ -78,6 +88,10 @@ def evaluate_media_quality(post: dict[str, Any], *, min_width: int = MIN_IMAGE_W
     path = files.get("image") or media.get("local_path") or product.get("image_path", "")
     reasons: list[str] = []
     width = height = 0
+    remote = product.get("image_url", "")
+    media_text = f"{path} {remote}".lower()
+    if any(hint in media_text for hint in BAD_MEDIA_NAME_HINTS):
+        reasons.append("media_non_product_asset")
     if not path or not Path(path).exists():
         reasons.append("media_quality_missing_local_image")
     else:
@@ -87,7 +101,6 @@ def evaluate_media_quality(post: dict[str, Any], *, min_width: int = MIN_IMAGE_W
             reasons.append("media_quality_unreadable_image")
         if width and height and (width < min_width or height < min_height):
             reasons.append(f"media_image_too_small:{width}x{height}")
-    remote = product.get("image_url", "")
     if image_url_has_thumbnail_hint(remote):
         reasons.append("media_remote_thumbnail_url")
     return MediaQualityResult(passed=not reasons, width=width, height=height, reasons=reasons)
