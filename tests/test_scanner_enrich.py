@@ -1,7 +1,7 @@
 import json
 import sqlite3
 
-from affilipilot.scanner.enrich import harvest_image_urls, harvest_lazada_product_urls, enrich_batch_media
+from affilipilot.scanner.enrich import harvest_image_urls, harvest_lazada_product_urls, enrich_batch_media, extract_lazada_product_media
 
 
 def test_harvest_image_urls_prefers_product_images():
@@ -13,6 +13,28 @@ def test_harvest_image_urls_prefers_product_images():
     images = harvest_image_urls(html, title="abc product")
     assert images[0].endswith("abc-product.jpg")
 
+
+def test_extract_lazada_product_media_from_seo_gallery_and_sku_galleries():
+    html = '''
+    <noscript><div class="seo-gallery">
+      <img src="https://img.lazcdn.com/g/p/a.jpg_720x720q80.jpg" itemprop="contentUrl" />
+      <img src="https://img.lazcdn.com/g/p/b.png_720x720q80.png" itemprop="contentUrl" />
+    </div></noscript>
+    <script>{"skuGalleries":{"0":[
+      {"poster":"https://filebroker-cdn.lazada.vn/kf/video-cover.jpg","type":"video","videoID":"1"},
+      {"src":"//vn-test-11.slatic.net/p/c.jpg","type":"img"},
+      {"src":"//img.lazcdn.com/g/tps/images/ims-web/logo.png","type":"img"}
+    ]},"contentUrl":"https://cloud.video.lazada.com/play/u/1/p/1/e/6/t/1/d/sd/abc.mp4"}</script>
+    '''
+    media = extract_lazada_product_media(html)
+    assert media["image_urls"][:3] == [
+        "https://img.lazcdn.com/g/p/a.jpg_720x720q80.jpg",
+        "https://img.lazcdn.com/g/p/b.png_720x720q80.png",
+        "https://filebroker-cdn.lazada.vn/kf/video-cover.jpg",
+    ]
+    assert "https://vn-test-11.slatic.net/p/c.jpg" in media["image_urls"]
+    assert all("ims-web" not in url for url in media["image_urls"])
+    assert media["video_urls"] == ["https://cloud.video.lazada.com/play/u/1/p/1/e/6/t/1/d/sd/abc.mp4"]
 
 def test_harvest_lazada_product_urls():
     html = '''

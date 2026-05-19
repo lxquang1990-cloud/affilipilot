@@ -96,6 +96,58 @@ def extract_shopee_product_media(html_text: str, *, limit: int = 12) -> dict[str
         "video_urls": video_urls[:3],
     }
 
+def _normalize_lazada_media_url(url: str) -> str:
+    url = (url or "").replace("\\/", "/").strip()
+    if url.startswith("//"):
+        url = "https:" + url
+    return url
+
+def extract_lazada_product_media(html_text: str, *, limit: int = 12) -> dict[str, Any]:
+    """Extract Lazada PDP gallery images/video from SEO gallery and skuGalleries.
+
+    Lazada exposes real product media in noscript SEO Gallery and embedded
+    `skuGalleries`. Generic HTML harvesting often finds only one `og:image` or
+    shell assets, so keep this source-specific and restrict to product CDN paths.
+    """
+    image_urls: list[str] = []
+    video_urls: list[str] = []
+
+    def add_image(url: str) -> None:
+        clean = _normalize_lazada_media_url(url)
+        low = clean.lower()
+        if not clean.startswith("http"):
+            return
+        if not any(host in low for host in ("lazcdn.com", "slatic.net", "filebroker-cdn.lazada.vn")):
+            return
+        if any(hint in low for hint in BAD_IMAGE_HINTS):
+            return
+        if not re.search(r"\.(?:jpg|jpeg|png|webp)(?:_|\?|$)", low):
+            return
+        if clean not in image_urls:
+            image_urls.append(clean)
+
+    def add_video(url: str) -> None:
+        clean = _normalize_lazada_media_url(url)
+        if clean.startswith("http") and ".mp4" in clean.lower() and clean not in video_urls:
+            video_urls.append(clean)
+
+    for match in re.finditer(r'<img[^>]+src=["\']([^"\']+)["\'][^>]*itemprop=["\']contentUrl["\']', html_text, re.I):
+        add_image(match.group(1))
+    for match in re.finditer(r'itemprop=["\']contentUrl["\'][^>]+src=["\']([^"\']+)["\']', html_text, re.I):
+        add_image(match.group(1))
+    gallery_pos = html_text.find('"skuGalleries"')
+    if gallery_pos >= 0:
+        snippet = html_text[gallery_pos:gallery_pos + 25000]
+        for match in re.finditer(r'"(?:src|poster)"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', snippet):
+            value = bytes(match.group(1), "utf-8").decode("unicode_escape", errors="ignore")
+            if ".mp4" in value.lower() or "cloud.video.lazada.com" in value.lower():
+                add_video(value)
+            else:
+                add_image(value)
+    for match in re.finditer(r'"contentUrl"\s*:\s*"(https?://[^"\\]+?\.mp4[^"\\]*)"', html_text, re.I):
+        add_video(match.group(1))
+    return {"image_urls": image_urls[:limit], "video_urls": video_urls[:3]}
+
 def harvest_lazada_product_urls(html_text: str, *, limit: int = 20) -> list[str]:
     urls = []
     for match in PRODUCT_URL_RE.findall(html_text):
@@ -135,7 +187,20 @@ def enrich_product_from_url(url: str, *, title: str = "", category: str = "unkno
             product["image_url"] = media["image_urls"][0]
             product["image_urls"] = media["image_urls"]
             product.setdefault("raw", {})["shopee_media"] = media
+            product["media_source"] = "shopee_pdp"
+            product["media_confidence"] = "official"
             product["notes"] = (product.get("notes", "") + ";shopee_product_media").strip(";")
+        if media.get("video_urls"):
+            product["video_urls"] = media["video_urls"]
+    elif "lazada." in urlparse(url).netloc.lower():
+        media = extract_lazada_product_media(html, limit=12)
+        if media.get("image_urls"):
+            product["image_url"] = media["image_urls"][0]
+            product["image_urls"] = media["image_urls"]
+            product.setdefault("raw", {})["lazada_media"] = media
+            product["media_source"] = "lazada_pdp"
+            product["media_confidence"] = "official"
+            product["notes"] = (product.get("notes", "") + ";lazada_product_media").strip(";")
         if media.get("video_urls"):
             product["video_urls"] = media["video_urls"]
     if not product.get("image_url"):
