@@ -166,6 +166,37 @@ def publish_photo_post(*, caption: str, image_path: str, link: str = "", config:
     return {**result, "endpoint": f"/{config.page_id}/photos"}
 
 
+def publish_photo_comment(*, object_id: str, image_path: str, message: str = "", config: FacebookConfig | None = None, timeout: int = 90) -> dict[str, Any]:
+    """Comment on a Facebook object with one local image attachment."""
+    config = config or FacebookConfig.from_env()
+    health = check_facebook_config(config)
+    if not health.verified:
+        raise RuntimeError("Facebook config is not verified: " + ",".join(health.reasons))
+    if not object_id.strip():
+        raise RuntimeError("Refusing to comment without target object id")
+    path = Path(image_path)
+    if not path.exists():
+        raise RuntimeError("Refusing to comment missing image file")
+    endpoint = f"https://graph.facebook.com/v19.0/{object_id}/comments"
+    fields = {"access_token": config.page_access_token}
+    if message.strip():
+        fields["message"] = message.strip()
+    result = _multipart_post(endpoint, fields=fields, files=[("source", path)], timeout=timeout)
+    return {**result, "endpoint": f"/{object_id}/comments"}
+
+
+def publish_gallery_comment(*, object_id: str, image_paths: list[str], message: str = "Ảnh thật sản phẩm", config: FacebookConfig | None = None, timeout: int = 90) -> dict[str, Any]:
+    """Post one image comment per gallery image and return aggregate status."""
+    results = []
+    for index, image_path in enumerate([path for path in image_paths if path][:4], 1):
+        text = message if index == 1 else ""
+        result = publish_photo_comment(object_id=object_id, image_path=image_path, message=text, config=config, timeout=timeout)
+        results.append({"image_path": image_path, **result})
+        if not result.get("ok"):
+            return {"ok": False, "status": result.get("status"), "stage": "image_comment", "results": results}
+    return {"ok": all(item.get("ok") for item in results), "status": 200 if results else 0, "stage": "image_comments", "results": results}
+
+
 def publish_video_post(*, description: str, video_path: str, link: str = "", config: FacebookConfig | None = None, timeout: int = 180) -> dict[str, Any]:
     """Publish one local video to Facebook Page videos."""
     config = config or FacebookConfig.from_env()

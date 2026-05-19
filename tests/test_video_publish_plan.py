@@ -17,7 +17,7 @@ def test_validate_video_path_accepts_mp4_fixture(tmp_path):
     assert result.media_type == "mp4"
 
 
-def test_graph_payload_prefers_video_primary_when_video_path_exists():
+def test_graph_payload_prefers_video_with_image_comment_when_gallery_exists():
     graph = build_graph_payload(
         page_id="page",
         message="caption",
@@ -26,6 +26,17 @@ def test_graph_payload_prefers_video_primary_when_video_path_exists():
         video_path="product.mp4",
     )
     assert graph["endpoint"] == "/page/videos"
-    assert graph["strategy"] == "video_primary"
+    assert graph["strategy"] == "video_primary_with_image_comment"
     assert graph["payload"]["local_video_path"] == "product.mp4"
     assert graph["payload"]["local_image_paths"] == ["a.jpg", "b.jpg"]
+
+
+def test_graph_payload_uses_video_primary_without_gallery():
+    graph = build_graph_payload(
+        page_id="page",
+        message="caption",
+        link="https://shorten.asia/abc",
+        video_path="product.mp4",
+    )
+    assert graph["endpoint"] == "/page/videos"
+    assert graph["strategy"] == "video_primary"

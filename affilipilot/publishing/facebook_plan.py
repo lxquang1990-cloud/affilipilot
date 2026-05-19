@@ -45,7 +45,7 @@ def build_graph_payload(*, page_id: str, message: str, link: str = "", image_pat
     if video_path:
         endpoint = f"/{page_id}/videos"
         payload = {"description": message, "url": link, "local_video_path": video_path, "local_image_paths": image_paths[:4]}
-        strategy = "video_primary"
+        strategy = "video_primary_with_image_comment" if image_paths else "video_primary"
     elif len(image_paths) >= 2:
         endpoint = f"/{page_id}/feed"
         payload = {"message": message, "url": link, "local_image_paths": image_paths[:4]}
