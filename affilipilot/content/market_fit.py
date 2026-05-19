@@ -16,7 +16,7 @@ class MarketFitResult:
     reasons: list[str] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
 
-def infer_angle(product: dict[str, Any], audience: str = "mother_baby") -> str:
+def infer_angle(product: dict[str, Any], audience: str = "profit_first") -> str:
     category = str(product.get("category", "")).lower()
     title = str(product.get("title", "")).lower()
     if category in ELECTRONICS or any(term in title for term in ("samsung", "galaxy", "iphone", "xiaomi", "điện thoại")):
@@ -33,7 +33,7 @@ def infer_angle(product: dict[str, Any], audience: str = "mother_baby") -> str:
         return "safe_play_and_discovery"
     return "clear_need_before_buying"
 
-def evaluate_market_fit(product: dict[str, Any], text: str = "", *, audience: str = "mother_baby") -> MarketFitResult:
+def evaluate_market_fit(product: dict[str, Any], text: str = "", *, audience: str = "profit_first") -> MarketFitResult:
     reasons: list[str] = []
     recommendations: list[str] = []
     score = 100
@@ -44,7 +44,12 @@ def evaluate_market_fit(product: dict[str, Any], text: str = "", *, audience: st
     angle = infer_angle(product, audience=audience)
 
     is_electronics = category in ELECTRONICS or any(term in title for term in ("samsung", "galaxy", "iphone", "xiaomi", "điện thoại"))
-    if audience == "mother_baby" and category and category not in MOTHER_BABY_CORE and not is_electronics:
+    if audience in {"profit_first", "diverse", "general", "multi_niche"}:
+        if price >= 10_000_000 and not any(term in lower_text for term in ("bảo hành", "trả góp", "chính hãng", "so sánh", "camera", "pin", "bộ nhớ")):
+            score -= 20
+            reasons.append("high_price_without_purchase_rationale")
+            recommendations.append("High-value products need concrete buying rationale: warranty, installment, specs, use-case, or comparison.")
+    elif audience == "mother_baby" and category and category not in MOTHER_BABY_CORE and not is_electronics:
         score -= 35
         reasons.append("category_not_core_audience")
         recommendations.append("Move this product to a better-matched page or write a very explicit family use-case.")
@@ -62,6 +67,11 @@ def evaluate_market_fit(product: dict[str, Any], text: str = "", *, audience: st
         if price >= 10_000_000 and not any(term in lower_text for term in ("so sánh", "bảo hành", "trả góp", "camera", "pin", "bộ nhớ")):
             score -= 20
             reasons.append("high_price_without_purchase_rationale")
+
+    if "đồ tiện dùng trong sinh hoạt hằng ngày với bé" in lower_text and audience in {"profit_first", "diverse", "general", "multi_niche"}:
+        score -= 35
+        reasons.append("generic_mother_baby_template_mismatch")
+        recommendations.append("Do not reuse mother/baby template copy for diverse profit-first products.")
 
     if any(tag in lower_text for tag in INTERNAL_HASHTAGS):
         score -= 15

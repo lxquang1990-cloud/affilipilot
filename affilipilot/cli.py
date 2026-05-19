@@ -5,6 +5,10 @@ from datetime import datetime
 from pathlib import Path
 
 from affilipilot.accesstrade.client import check_accesstrade_config
+from affilipilot.accesstrade.campaigns import write_campaign_registry
+from affilipilot.accesstrade.catalog import fetch_datafeeds, fetch_top_products, write_products_input
+from affilipilot.accesstrade.deals import fetch_coupons, fetch_offer_keywords, fetch_offer_merchants, write_deals
+from affilipilot.accesstrade.reports import fetch_order_list, render_order_summary, save_orders, summarize_orders, write_json as write_report_json
 from affilipilot.analytics.digest import build_daily_digest
 from affilipilot.analytics.performance import PostPerformance, record_performance, render_performance_summary, summarize_performance
 from affilipilot.budget import record_spend
@@ -13,7 +17,7 @@ from affilipilot.content.market_fit import evaluate_market_fit, render_market_fi
 from affilipilot.content.variants import generate_content_variants
 from affilipilot.marketplaces import classify_url, discovery_advice
 from affilipilot.offer import render_offer_validation, validate_offer
-from affilipilot.publishing.facebook import check_facebook_config, publish_photo_post, publish_post
+from affilipilot.publishing.facebook import check_facebook_config, publish_multi_photo_post, publish_photo_post, publish_post
 from affilipilot.publishing.facebook_plan import plan_facebook_batch, render_facebook_plan
 from affilipilot.publishing.facebook_token import check_facebook_token, render_facebook_token_report
 from affilipilot.publishing.facebook_token_manager import derive_page_token, exchange_short_token, inspect_current_page_token, refresh_from_user_token, render_token_manager_result
@@ -28,12 +32,15 @@ from affilipilot.telegram.delivery import build_openclaw_telegram_plan, deliver_
 from affilipilot.telegram.outbox import Outbox
 from affilipilot.workflows.accesstrade_links import convert_input_links, write_converted_input
 from affilipilot.workflows.discover_convert import run_discover_convert, render_discover_convert_summary
+from affilipilot.workflows.e2e_profit import render_profit_first_e2e, run_profit_first_e2e
 from affilipilot.workflows.channel_approval import run_channel_to_approval, render_channel_to_approval
 from affilipilot.workflows.affiliate_ready import render_affiliate_ready_validation, validate_affiliate_ready_input
 from affilipilot.workflows.approval import create_approval_batch, decide_post, render_status
 from affilipilot.workflows.batch_status import build_batch_status, render_batch_status
 from affilipilot.workflows.daily_batch import build_batch
 from affilipilot.workflows.run_day import run_day
+from affilipilot.workflows.multi_source import load_source_config, render_multi_source_summary, run_multi_source_discovery
+from affilipilot.workflows.multi_source_approval import render_multi_source_approval, run_multi_source_approval
 from affilipilot.workflows.next_action import recommend_next_action, render_next_action
 from affilipilot.workflows.doctor import build_doctor_report, render_doctor_report
 from affilipilot.workflows.campaign_status import build_campaign_status, render_campaign_status
@@ -139,6 +146,58 @@ def cmd_discover_convert(args: argparse.Namespace) -> int:
     )
     print(render_discover_convert_summary(summary))
     return 0 if summary.get("conversion", {}).get("ok_count", 0) > 0 else 2
+
+
+def cmd_profit_e2e(args: argparse.Namespace) -> int:
+    summary = run_profit_first_e2e(
+        batch_key=args.batch_key,
+        work_dir=args.work_dir,
+        db_path=args.db,
+        outbox_path=args.outbox,
+        sources_path=args.sources or None,
+        discover_limit=args.discover_limit,
+        select_limit=args.limit,
+        real_accesstrade=args.real_accesstrade,
+        queue_telegram=not args.no_queue,
+        cache_dir=args.cache_dir,
+    )
+    print(render_profit_first_e2e(summary))
+    return 0 if summary.get("ok") else 2
+
+def cmd_multi_source_scan(args: argparse.Namespace) -> int:
+    sources = load_source_config(args.sources)
+    summary = run_multi_source_discovery(
+        sources=sources,
+        work_dir=args.work_dir,
+        per_source_limit=args.per_source_limit,
+        final_limit=args.limit,
+        dry_run=args.dry_run,
+        timeout_ms=args.timeout_ms,
+        wait_ms=args.wait_ms,
+        headless=not args.headed,
+    )
+    print(render_multi_source_summary(summary))
+    return 0 if summary.get("selected_count", 0) else 2
+
+
+def cmd_multi_source_approval(args: argparse.Namespace) -> int:
+    sources = load_source_config(args.sources)
+    summary = run_multi_source_approval(
+        sources=sources,
+        batch_key=args.batch_key,
+        work_dir=args.work_dir,
+        db_path=args.db,
+        outbox_path=args.outbox,
+        per_source_limit=args.per_source_limit,
+        limit=args.limit,
+        dry_run=args.dry_run,
+        timeout_ms=args.timeout_ms,
+        wait_ms=args.wait_ms,
+        headless=not args.headed,
+        queue_telegram=not args.no_queue,
+    )
+    print(render_multi_source_approval(summary))
+    return 0 if summary.get("ok") else 2
 
 
 def cmd_channel_approval(args: argparse.Namespace) -> int:
@@ -501,7 +560,9 @@ def cmd_facebook_publish_one(args: argparse.Namespace) -> int:
     if item.get("status") != "publishable_dry_run":
         raise SystemExit(f"Refusing publish; plan status is {item.get('status')}: {item.get('reasons')}")
     payload = item.get("payload_preview", {})
-    if item.get("endpoint", "").endswith("/photos"):
+    if payload.get("strategy") == "multi_photo":
+        result = publish_multi_photo_post(message=payload.get("message", ""), image_paths=payload.get("local_image_paths", []), link=payload.get("url", ""))
+    elif item.get("endpoint", "").endswith("/photos"):
         result = publish_photo_post(caption=payload.get("caption", ""), image_path=payload.get("local_image_path", ""), link=payload.get("url", ""))
     else:
         result = publish_post(post_text=payload.get("message", ""), link=payload.get("link", ""))
@@ -570,6 +631,65 @@ def cmd_validate_input(args: argparse.Namespace) -> int:
     print(render_affiliate_ready_validation(validation))
     return 0 if validation.passed else 2
 
+
+def cmd_accesstrade_campaigns(args: argparse.Namespace) -> int:
+    registry = write_campaign_registry(args.out, approval=args.approval)
+    print(f"Accesstrade campaigns: ok={registry.get('ok')} count={len(registry.get('campaigns', []))}")
+    if registry.get("error"):
+        print(f"Error: {registry['error']}")
+    print(f"Output JSON: {args.out}")
+    return 0 if registry.get("ok") else 2
+
+def cmd_accesstrade_datafeed(args: argparse.Namespace) -> int:
+    data = fetch_datafeeds(campaign=args.campaign, domain=args.domain, cat=args.cat, status_discount=args.status_discount, discount_rate_from=args.discount_rate_from, price_from=args.price_from, price_to=args.price_to, page=args.page, limit=args.limit)
+    write_report_json(args.out, data)
+    print(f"Accesstrade datafeed: ok={data.get('ok')} products={len(data.get('products', []))}")
+    print(f"Output JSON: {args.out}")
+    if args.write_input:
+        path = write_products_input(data.get("products", []), args.write_input, category_override=args.category)
+        print(f"Input TXT: {path}")
+    return 0 if data.get("ok") else 2
+
+def cmd_accesstrade_top_products(args: argparse.Namespace) -> int:
+    data = fetch_top_products(merchant=args.merchant, date_from=args.date_from, date_to=args.date_to)
+    write_report_json(args.out, data)
+    print(f"Accesstrade top-products: ok={data.get('ok')} products={len(data.get('products', []))}")
+    print(f"Output JSON: {args.out}")
+    if args.write_input:
+        path = write_products_input(data.get("products", []), args.write_input, category_override=args.category)
+        print(f"Input TXT: {path}")
+    return 0 if data.get("ok") else 2
+
+def cmd_accesstrade_deals(args: argparse.Namespace) -> int:
+    if args.kind == "merchants":
+        data = fetch_offer_merchants()
+    elif args.kind == "keywords":
+        data = fetch_offer_keywords()
+    else:
+        data = fetch_coupons(merchant=args.merchant, keyword=args.keyword, is_next_day_coupon=args.next_day, limit=args.limit, page=args.page)
+    write_deals(args.out, data)
+    count_key = "deals" if args.kind == "coupons" else args.kind
+    print(f"Accesstrade deals {args.kind}: ok={data.get('ok')} count={len(data.get(count_key, []))}")
+    print(f"Output JSON: {args.out}")
+    return 0 if data.get("ok") else 2
+
+def cmd_accesstrade_orders(args: argparse.Namespace) -> int:
+    data = fetch_order_list(since=args.since, until=args.until, merchant=args.merchant, status=args.status, page=args.page, limit=args.limit)
+    write_report_json(args.out, data)
+    saved = save_orders(args.db, data.get("orders", [])) if data.get("ok") else 0
+    summary = summarize_orders(args.db)
+    print(f"Accesstrade orders: ok={data.get('ok')} fetched={len(data.get('orders', []))} saved={saved}")
+    print(f"Output JSON: {args.out}")
+    print(render_order_summary(summary))
+    return 0 if data.get("ok") else 2
+
+def cmd_accesstrade_report(args: argparse.Namespace) -> int:
+    summary = summarize_orders(args.db)
+    print(render_order_summary(summary))
+    if args.out:
+        write_report_json(args.out, summary)
+        print(f"Output JSON: {args.out}")
+    return 0
 
 def cmd_accesstrade_convert(args: argparse.Namespace) -> int:
     summary = convert_input_links(args.input, args.out, dry_run=args.dry_run, limit=args.limit, campaign_key=args.campaign_key, allow_channel_urls=args.allow_channel_urls)
@@ -674,6 +794,47 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--category", default="unknown")
     p.set_defaults(func=cmd_browser_scan_plan)
 
+
+    p = sub.add_parser("profit-e2e", help="Standard profit-first E2E: Accesstrade discovery -> scoring -> conversion -> vetted approval outbox -> ready preview; no publish")
+    p.add_argument("--batch-key", required=True)
+    p.add_argument("--work-dir", default="data/runs/profit-e2e")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--outbox", default="data/outbox/profit-e2e.json")
+    p.add_argument("--sources", default="", help="Optional JSON sources config; defaults to profit-first Accesstrade sources")
+    p.add_argument("--discover-limit", type=int, default=50)
+    p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--real-accesstrade", action="store_true", help="Call real Accesstrade conversion API; default is dry-run")
+    p.add_argument("--no-queue", action="store_true", help="Do not queue Telegram approval cards")
+    p.add_argument("--cache-dir", default="data/cache/accesstrade/sources", help="Cross-run source cache directory for Accesstrade source fallback")
+    p.set_defaults(func=cmd_profit_e2e)
+
+    p = sub.add_parser("multi-source-scan", help="Run multiple marketplace sources, merge/dedupe/rank candidates, and write one selected input file")
+    p.add_argument("--sources", default="config/multi-source.mother-baby.json", help="JSON source config; defaults to mother/baby multi-source config")
+    p.add_argument("--work-dir", default="data/runs/multi-source-scan")
+    p.add_argument("--per-source-limit", type=int, default=5)
+    p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--timeout-ms", type=int, default=45000)
+    p.add_argument("--wait-ms", type=int, default=3000)
+    p.add_argument("--headed", action="store_true")
+    p.add_argument("--real", dest="dry_run", action="store_false", help="Call real Accesstrade API for each discovered product")
+    p.set_defaults(dry_run=True)
+    p.set_defaults(func=cmd_multi_source_scan)
+
+    p = sub.add_parser("multi-source-approval", help="Multi-source scanner to local approval batch; no Telegram delivery and no publish")
+    p.add_argument("--sources", default="config/multi-source.mother-baby.json")
+    p.add_argument("--batch-key", required=True)
+    p.add_argument("--work-dir", default="data/runs/multi-source-approval")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--outbox", default="data/outbox/telegram.json")
+    p.add_argument("--per-source-limit", type=int, default=5)
+    p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--timeout-ms", type=int, default=45000)
+    p.add_argument("--wait-ms", type=int, default=3000)
+    p.add_argument("--headed", action="store_true")
+    p.add_argument("--no-queue", action="store_true")
+    p.add_argument("--real", dest="dry_run", action="store_false", help="Call real Accesstrade API for each discovered product")
+    p.set_defaults(dry_run=True)
+    p.set_defaults(func=cmd_multi_source_approval)
 
     p = sub.add_parser("channel-approval", help="One-command channel/listing URL to local approval batch; no Telegram delivery and no publish")
     p.add_argument("--url", required=True)
@@ -1023,6 +1184,61 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("validate-input", help="Validate input has affiliate/tracking link and media before publishing")
     p.add_argument("--input", required=True)
     p.set_defaults(func=cmd_validate_input)
+
+    p = sub.add_parser("accesstrade-campaigns", help="Fetch approved Accesstrade campaign registry; no publish")
+    p.add_argument("--out", default="data/accesstrade/campaigns.json")
+    p.add_argument("--approval", default="successful")
+    p.set_defaults(func=cmd_accesstrade_campaigns)
+
+    p = sub.add_parser("accesstrade-datafeed", help="Fetch Accesstrade datafeed products and optionally write AffiliPilot input TXT")
+    p.add_argument("--out", default="data/accesstrade/datafeed.json")
+    p.add_argument("--write-input", default="")
+    p.add_argument("--campaign", default="")
+    p.add_argument("--domain", default="")
+    p.add_argument("--cat", default="", help="Accesstrade category code, e.g. thiet-bi-gia-dung, cong-nghe, nha-cua-doi-song")
+    p.add_argument("--status-discount", default="")
+    p.add_argument("--discount-rate-from", default="")
+    p.add_argument("--price-from", default="")
+    p.add_argument("--price-to", default="")
+    p.add_argument("--category", default="")
+    p.add_argument("--page", type=int, default=1)
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_accesstrade_datafeed)
+
+    p = sub.add_parser("accesstrade-top-products", help="Fetch Accesstrade top products and optionally write AffiliPilot input TXT")
+    p.add_argument("--out", default="data/accesstrade/top-products.json")
+    p.add_argument("--write-input", default="")
+    p.add_argument("--merchant", default="")
+    p.add_argument("--date-from", default="")
+    p.add_argument("--date-to", default="")
+    p.add_argument("--category", default="")
+    p.set_defaults(func=cmd_accesstrade_top_products)
+
+    p = sub.add_parser("accesstrade-deals", help="Fetch Accesstrade offer merchants/keywords/coupons; no publish")
+    p.add_argument("--kind", choices=["merchants", "keywords", "coupons"], default="coupons")
+    p.add_argument("--out", default="data/accesstrade/deals.json")
+    p.add_argument("--merchant", default="")
+    p.add_argument("--keyword", default="")
+    p.add_argument("--next-day", action="store_true")
+    p.add_argument("--page", type=int, default=1)
+    p.add_argument("--limit", type=int, default=50)
+    p.set_defaults(func=cmd_accesstrade_deals)
+
+    p = sub.add_parser("accesstrade-orders", help="Fetch Accesstrade orders into local DB and print performance summary")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--out", default="data/accesstrade/orders.json")
+    p.add_argument("--since", required=True)
+    p.add_argument("--until", required=True)
+    p.add_argument("--merchant", default="")
+    p.add_argument("--status", default="")
+    p.add_argument("--page", type=int, default=1)
+    p.add_argument("--limit", type=int, default=300)
+    p.set_defaults(func=cmd_accesstrade_orders)
+
+    p = sub.add_parser("accesstrade-report", help="Summarize synced Accesstrade orders from local DB")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--out", default="")
+    p.set_defaults(func=cmd_accesstrade_report)
 
     p = sub.add_parser("accesstrade-convert", help="Convert product URLs to Accesstrade tracking links; dry-run by default")
     p.add_argument("--input", required=True)

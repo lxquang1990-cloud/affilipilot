@@ -8,6 +8,15 @@ from affilipilot.publishing.ready_package import build_ready_to_post_package
 from affilipilot.workflows.approval import create_approval_batch, decide_post
 
 
+def _jpeg_800x800() -> bytes:
+    return (
+        b"\xff\xd8"
+        b"\xff\xc0\x00\x11\x08\x03\x20\x03\x20\x03\x01\x11\x00\x02\x11\x00\x03\x11\x00"
+        b"\xff\xd9"
+    )
+
+
+
 def test_publish_gate_blocks_without_facebook(tmp_path):
     post_file = tmp_path / "post.txt"
     post_file.write_text("Caption\n\nBài viết có chứa link tiếp thị liên kết.", encoding="utf-8")
@@ -21,7 +30,7 @@ def test_publish_gate_allows_when_all_conditions_true(tmp_path):
     post_file = tmp_path / "post.txt"
     post_file.write_text("Caption\n\nBài viết có chứa link tiếp thị liên kết.", encoding="utf-8")
     image_file = tmp_path / "product.jpg"
-    image_file.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
+    image_file.write_bytes(_jpeg_800x800())
     post = {
         "product": {"url": "https://go.isclix.com/deep_link/abc", "image_path": str(image_file)},
         "compliance": {"status": "pass"},
@@ -48,7 +57,7 @@ def test_approve_ready_cli_builds_ready_package_and_plan(tmp_path, monkeypatch, 
     monkeypatch.setenv("FACEBOOK_PAGE_ACCESS_TOKEN", "token")
     input_file = tmp_path / "links.txt"
     image_file = tmp_path / "product.jpg"
-    image_file.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
+    image_file.write_bytes(_jpeg_800x800())
     input_file.write_text(f"https://go.isclix.com/deep_link/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_path={image_file}", encoding="utf-8")
     db_path = tmp_path / "affilipilot.db"
     create_approval_batch(input_file, tmp_path / "drafts", db_path, batch_key="batch", limit=1)

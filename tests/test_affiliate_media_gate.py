@@ -4,6 +4,15 @@ from affilipilot.publishing.gate import evaluate_publish_gate
 from affilipilot.publishing.requirements import check_affiliate_link, check_media, is_affiliate_link
 from affilipilot.sources.manual_input import parse_link_lines
 
+
+def _jpeg_800x800() -> bytes:
+    return (
+        b"\xff\xd8"
+        b"\xff\xc0\x00\x11\x08\x03\x20\x03\x20\x03\x01\x11\x00\x02\x11\x00\x03\x11\x00"
+        b"\xff\xd9"
+    )
+
+
 def test_affiliate_link_detection_blocks_plain_demo():
     assert not is_affiliate_link("https://shopee.vn/example-storage")
     assert not is_affiliate_link("https://shopee.vn/product-normal")
@@ -42,7 +51,7 @@ def test_publish_gate_blocks_remote_media_not_downloaded(tmp_path):
 def test_publish_gate_allows_affiliate_and_local_media(tmp_path):
     post_file = tmp_path / "post.txt"
     image_file = tmp_path / "product.jpg"
-    image_file.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
+    image_file.write_bytes(_jpeg_800x800())
     post_file.write_text("Caption\n\nBài viết có chứa link tiếp thị liên kết.", encoding="utf-8")
     post = {
         "product": {"url": "https://go.isclix.com/deep_link/abc", "image_url": "https://cdn.example/product.jpg"},
@@ -54,7 +63,7 @@ def test_publish_gate_allows_affiliate_and_local_media(tmp_path):
 
 def test_requirement_helpers(tmp_path):
     image_file = tmp_path / "product.jpg"
-    image_file.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
+    image_file.write_bytes(_jpeg_800x800())
     post = {"product": {"url": "https://go.isclix.com/a", "image_url": "https://img.example/a.jpg"}, "files": {"image": str(image_file)}}
     assert check_affiliate_link(post).passed
     assert check_media(post).passed

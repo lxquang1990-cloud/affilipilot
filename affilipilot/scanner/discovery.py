@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
+from affilipilot.media_quality import upgrade_lazada_image_url
 from affilipilot.quality import is_product_detail_url
 from affilipilot.scanner.core import ProductScanItem, ScanResult, ScanSource, _abs_url, _clean_text, parse_price_vnd, scan_url, write_scan_result
 
@@ -64,7 +65,27 @@ def _normalize_product_url(url: str) -> str:
 
 
 def _item_score(item: ProductScanItem) -> int:
-    return (30 if item.title else 0) + (20 if item.image_url else 0) + (10 if item.price_vnd else 0)
+    gallery_bonus = min(len(item.raw.get("image_urls", []) or []), 3) * 5
+    video_bonus = 5 if item.raw.get("video_urls") else 0
+    return (30 if item.title else 0) + (20 if item.image_url else 0) + (10 if item.price_vnd else 0) + gallery_bonus + video_bonus
+
+
+def _extract_media_urls(fragment: str, base_url: str) -> tuple[list[str], list[str]]:
+    images: list[str] = []
+    videos: list[str] = []
+    for attr in ("src", "data-src", "data-lazy-src", "data-original"):
+        for value in re.findall(rf'<img[^>]+{attr}=["\']([^"\']+)["\']', fragment, flags=re.I):
+            url = _abs_url(value, base_url)
+            if not url.lower().startswith("data:"):
+                upgraded = upgrade_lazada_image_url(url)
+                if upgraded not in images:
+                    images.append(upgraded)
+    for pattern in (r'<video[^>]+src=["\']([^"\']+)["\']', r'<source[^>]+src=["\']([^"\']+)["\']'):
+        for value in re.findall(pattern, fragment, flags=re.I):
+            url = _abs_url(value, base_url)
+            if url not in videos:
+                videos.append(url)
+    return images, videos
 
 
 def _dedupe_discovered_items(items: list[ProductScanItem], *, limit: int | None = None) -> list[ProductScanItem]:
@@ -93,12 +114,8 @@ def _card_product_items(html_text: str, *, base_url: str, source: str, category:
         img_alt = re.search(r'<img[^>]+alt=["\']([^"\']+)["\']', body, flags=re.I)
         if img_alt and (not text or len(text) < 12):
             text = _clean_text(img_alt.group(1))
-        image = ""
-        img = re.search(r'<img[^>]+(?:src|data-src|data-lazy-src)=["\']([^"\']+)["\']', body, flags=re.I)
-        if img:
-            image = _abs_url(img.group(1), base_url)
-            if image.lower().startswith("data:"):
-                image = ""
+        image_urls, video_urls = _extract_media_urls(body, base_url)
+        image = image_urls[0] if image_urls else ""
         price = None
         price_match = re.search(r'([0-9][0-9\.]{3,}\s*đ)', body, flags=re.I)
         if price_match:
@@ -111,7 +128,7 @@ def _card_product_items(html_text: str, *, base_url: str, source: str, category:
             image_url=image,
             source=source,
             notes="product_card_discovery",
-            raw={"parser": "product_card_discovery", "media_source": "product_card_image" if image else "", "media_confidence": "high" if image else ""},
+            raw={"parser": "product_card_discovery", "media_source": "product_card_image" if image else "", "media_confidence": "high" if image else "", "image_urls": image_urls, "video_urls": video_urls},
         ))
     return _dedupe_discovered_items(items, limit=limit)
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from affilipilot.config import DEFAULT_SECRET_PATH, load_env_file
+from affilipilot.links.shortlink import is_short_link
 
 
 @dataclass
@@ -97,6 +98,51 @@ def publish_post(*, post_text: str, link: str = "", config: FacebookConfig | Non
         }
 
 
+def _caption_link(link: str) -> str:
+    """Return the exact click-safe URL to place in Facebook captions.
+
+    Never use cosmetic ellipsis/truncated URLs here: Facebook auto-links visible
+    URLs, so a shortened display string such as ``https://go.isclix.com/deep_link/...``
+    becomes a real broken link.
+    """
+    cleaned = link.strip()
+    if not cleaned:
+        return ""
+    if not is_short_link(cleaned):
+        raise RuntimeError("Refusing to publish raw affiliate URL in caption; provision product.short_url first")
+    return cleaned
+
+
+def _multipart_post(endpoint: str, *, fields: dict[str, str], files: list[tuple[str, Path]], timeout: int = 60) -> dict[str, Any]:
+    boundary = "----AffiliPilotBoundary7MA4YWxkTrZu0gW"
+    parts: list[bytes] = []
+    for name, value in fields.items():
+        parts.append(f"--{boundary}\r\n".encode())
+        parts.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode())
+        parts.append(value.encode("utf-8"))
+        parts.append(b"\r\n")
+    for name, path in files:
+        parts.append(f"--{boundary}\r\n".encode())
+        parts.append(f'Content-Disposition: form-data; name="{name}"; filename="{path.name}"\r\n'.encode())
+        parts.append(b"Content-Type: application/octet-stream\r\n\r\n")
+        parts.append(path.read_bytes())
+        parts.append(b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    req = urllib.request.Request(endpoint, data=b"".join(parts), method="POST", headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            parsed = json.loads(body) if body else {}
+            return {"ok": 200 <= resp.status < 300, "status": resp.status, "response": parsed}
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            parsed = {"raw": body[:500]}
+        return {"ok": False, "status": exc.code, "response": parsed}
+
+
 def publish_photo_post(*, caption: str, image_path: str, link: str = "", config: FacebookConfig | None = None, timeout: int = 60) -> dict[str, Any]:
     """Publish one local image to Facebook Page photos.
 
@@ -114,35 +160,53 @@ def publish_photo_post(*, caption: str, image_path: str, link: str = "", config:
         raise RuntimeError("Refusing to publish empty caption")
 
     endpoint = f"https://graph.facebook.com/v19.0/{config.page_id}/photos"
-    boundary = "----AffiliPilotBoundary7MA4YWxkTrZu0gW"
-    caption_text = caption + (f"\n\n{link}" if link else "")
-    parts: list[bytes] = []
+    caption_link = _caption_link(link)
+    caption_text = caption + (f"\n\nLink sản phẩm: {caption_link}" if caption_link else "")
+    result = _multipart_post(endpoint, fields={"caption": caption_text, "access_token": config.page_access_token}, files=[("source", path)], timeout=timeout)
+    return {**result, "endpoint": f"/{config.page_id}/photos"}
 
-    def add_field(name: str, value: str) -> None:
-        parts.append(f"--{boundary}\r\n".encode())
-        parts.append(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode())
-        parts.append(value.encode("utf-8"))
-        parts.append(b"\r\n")
 
-    add_field("caption", caption_text)
-    add_field("access_token", config.page_access_token)
-    parts.append(f"--{boundary}\r\n".encode())
-    parts.append(f'Content-Disposition: form-data; name="source"; filename="{path.name}"\r\n'.encode())
-    parts.append(b"Content-Type: application/octet-stream\r\n\r\n")
-    parts.append(path.read_bytes())
-    parts.append(b"\r\n")
-    parts.append(f"--{boundary}--\r\n".encode())
-    data = b"".join(parts)
-    req = urllib.request.Request(endpoint, data=data, method="POST", headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
+def publish_multi_photo_post(*, message: str, image_paths: list[str], link: str = "", config: FacebookConfig | None = None, timeout: int = 90) -> dict[str, Any]:
+    """Publish a Facebook feed post with multiple attached photos.
+
+    Uploads photos unpublished first, then creates one feed post with attached_media.
+    """
+    config = config or FacebookConfig.from_env()
+    health = check_facebook_config(config)
+    if not health.verified:
+        raise RuntimeError("Facebook config is not verified: " + ",".join(health.reasons))
+    paths = [Path(path) for path in image_paths if path]
+    if len(paths) < 2:
+        raise RuntimeError("multi-photo publish requires at least 2 images")
+    for path in paths:
+        if not path.exists():
+            raise RuntimeError(f"Refusing to publish missing image file: {path}")
+    upload_ids: list[str] = []
+    for path in paths[:4]:
+        endpoint = f"https://graph.facebook.com/v19.0/{config.page_id}/photos"
+        upload = _multipart_post(endpoint, fields={"published": "false", "access_token": config.page_access_token}, files=[("source", path)], timeout=timeout)
+        if not upload.get("ok"):
+            return {**upload, "endpoint": f"/{config.page_id}/photos", "stage": "upload_unpublished_photo", "uploaded_media_ids": upload_ids}
+        media_id = upload.get("response", {}).get("id")
+        if media_id:
+            upload_ids.append(media_id)
+    caption_link = _caption_link(link)
+    message_text = message + (f"\n\nLink sản phẩm: {caption_link}" if caption_link else "")
+    payload = {"message": message_text, "access_token": config.page_access_token}
+    for index, media_id in enumerate(upload_ids):
+        payload[f"attached_media[{index}]"] = json.dumps({"media_fbid": media_id})
+    data = urllib.parse.urlencode(payload).encode("utf-8")
+    endpoint = f"https://graph.facebook.com/v19.0/{config.page_id}/feed"
+    req = urllib.request.Request(endpoint, data=data, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             parsed = json.loads(body) if body else {}
-            return {"ok": 200 <= resp.status < 300, "status": resp.status, "response": parsed, "endpoint": f"/{config.page_id}/photos"}
+            return {"ok": 200 <= resp.status < 300, "status": resp.status, "response": parsed, "endpoint": f"/{config.page_id}/feed", "stage": "feed_multi_photo", "uploaded_media_ids": upload_ids}
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         try:
             parsed = json.loads(body) if body else {}
         except json.JSONDecodeError:
             parsed = {"raw": body[:500]}
-        return {"ok": False, "status": exc.code, "response": parsed, "endpoint": f"/{config.page_id}/photos"}
+        return {"ok": False, "status": exc.code, "response": parsed, "endpoint": f"/{config.page_id}/feed", "stage": "feed_multi_photo", "uploaded_media_ids": upload_ids}

@@ -15,6 +15,9 @@ data/**/*.db
 data/**/*.sqlite
 data/outbox/*.json
 data/publish/*.json
+data/cache/
+data/accesstrade/*.json
+data/accesstrade/*.txt
 data/scans/
 data/runs/
 data/bridge-smoke/
@@ -22,6 +25,8 @@ data/smoke-happy-path/
 data/demo-happy-path/
 data/_archive/
 logs/
+.venv/
+venv/
 
 # Backups and local scratch
 backups/

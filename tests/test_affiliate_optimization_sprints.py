@@ -9,7 +9,7 @@ from affilipilot.strategy import default_strategy
 def test_market_fit_blocks_generic_phone_for_mother_baby():
     product = {"title": "Samsung Galaxy S26 Ultra", "category": "electronics", "price_vnd": 30490000}
     text = "Một gợi ý nhỏ cho mẹ đang tìm đồ tiện dùng trong sinh hoạt hằng ngày với bé. #CellphoneSAffiliate"
-    result = evaluate_market_fit(product, text)
+    result = evaluate_market_fit(product, text, audience="mother_baby")
     assert not result.passed
     assert "generic_mother_baby_template_mismatch" in result.reasons
     assert "missing_family_electronics_angle" in result.reasons
@@ -40,7 +40,13 @@ def test_performance_summary_groups_by_category_and_angle(tmp_path):
     assert summary["by_angle"]["family_camera"]["conversions"] == 1
 
 
-def test_default_strategy_blocks_generic_flagship_tech():
+def test_default_strategy_profit_first_by_default():
     strategy = default_strategy()
+    assert strategy.primary_lane == "profit_first_multi_category"
+    assert "raw_affiliate_links" in strategy.blocked_lanes
+
+
+def test_default_strategy_mother_baby_when_requested():
+    strategy = default_strategy(audience="mother_baby")
     assert strategy.primary_lane == "mother_baby_core"
     assert "generic_flagship_tech" in strategy.blocked_lanes

@@ -14,7 +14,7 @@ def test_build_isclix_deep_link_contains_campaign_channel_and_encoded_url():
     assert "sub4=product" in link
 
 
-def test_create_tracking_link_fallbacks_on_campaign_not_running_response(monkeypatch):
+def test_create_tracking_link_blocks_campaign_not_running_response(monkeypatch):
     import affilipilot.accesstrade.client as client
 
     class Resp:
@@ -29,5 +29,8 @@ def test_create_tracking_link_fallbacks_on_campaign_not_running_response(monkeyp
         campaigns={"CELLPHONES": AccesstradeCampaign(key="CELLPHONES", campaign_id="campaign123", channel_id="channel456", domains=("cellphones.com.vn",))},
     )
     res = create_tracking_link(url="https://cellphones.com.vn/dien-thoai.html", utm={"sub1":"telegram"}, config=config, dry_run=False, campaign_key="CELLPHONES")
-    assert res.ok
-    assert "go.isclix.com/deep_link/v5/campaign123/channel456" in res.affiliate_url
+    assert not res.ok
+    assert res.affiliate_url == ""
+    assert res.short_url == ""
+    assert res.link_status == "missing_link"
+    assert "Campaign does not exists or not running" in res.error

@@ -25,58 +25,98 @@ def _price_hint(product: ProductCandidate) -> str:
     if product.price_vnd:
         price = f"{product.price_vnd:,}".replace(",", ".")
         return f"Giá tham khảo khoảng {price}đ, có thể thay đổi theo thời điểm."
-    return "Giá/ưu đãi có thể thay đổi theo thời điểm, mẹ kiểm tra lại trước khi mua nhé."
+    return "Giá/ưu đãi có thể thay đổi theo thời điểm, nên kiểm tra lại trước khi mua."
+
+
+def _discount_hint(product: ProductCandidate) -> str:
+    text = product.notes.lower()
+    if "discount_rate=" in text:
+        raw = text.split("discount_rate=", 1)[1].split(";", 1)[0].split(" ", 1)[0]
+        try:
+            rate = float(raw)
+            if rate <= 1:
+                rate *= 100
+            if rate >= 10:
+                return f"Điểm đáng chú ý là sản phẩm đang có mức giảm khoảng {rate:.0f}% theo data hiện tại."
+        except ValueError:
+            pass
+    if "discount_vnd=" in text:
+        return "Sản phẩm đang có ưu đãi theo data hiện tại, nên kiểm tra lại giá trước khi chốt."
+    return ""
+
+
+def _merchant_hint(product: ProductCandidate) -> str:
+    text = f"{product.notes} {product.url}".lower()
+    if "lazada_kol" in text or "lazada" in text:
+        return "Nên ưu tiên shop có đánh giá tốt, thông tin bảo hành rõ và chính sách đổi trả minh bạch trên Lazada."
+    if "shopee" in text:
+        return "Nên ưu tiên shop Mall/Shop yêu thích, lượt bán thật và đánh giá có ảnh trên Shopee."
+    if "tiki" in text:
+        return "Nên kiểm tra nhãn Tiki Trading/official store và thời gian giao hàng trước khi mua."
+    return "Nên kiểm tra đánh giá shop, ảnh thật và chính sách đổi trả trước khi mua."
 
 
 def _interest_hashtags(product: ProductCandidate) -> str:
     link = product.tracking_url or product.affiliate_url or product.url
     host = urlparse(link).netloc.lower()
     text = f"{link} {product.notes} {product.title} {product.category}".lower()
-    if "cellphones" in text or "cellphones" in host or product.category.lower() in {"electronics", "phone", "smartphone"}:
-        return "#samsung #S26Ultra #reviewdienthoai #congnghe2025"
-    if "khăn sữa" in text or "khan sua" in text or product.category.lower() == "baby_care":
+    category = product.category.lower()
+    if "cellphones" in text or "cellphones" in host or category in {"electronics", "phone", "smartphone", "laptop", "computer"}:
+        return "#congnghe #muasamthongminh #dealcongnghe #reviewdientu"
+    if category in {"home_appliance", "home_living"}:
+        return "#dogiadung #nhacuasachgon #muasamthongminh #dealgiadung"
+    if "khăn sữa" in text or "khan sua" in text or category == "baby_care":
         return "#khansua #mevabe #dodungchobe #mebim"
-    if "feeding" in text or product.category.lower() == "feeding":
+    if "feeding" in text or category == "feeding":
         return "#andam #mevabe #dodungchobe #mebim"
-    if "storage" in text or product.category.lower() == "storage":
+    if "storage" in text or category == "storage":
         return "#sapxepnhacua #dodungchobe #mebim #nhacuasachgon"
-    if "lazada" in text or "lazada" in host:
-        return "#mevabe #giadinh #muasamthongminh"
-    if "shopee" in text or "shopee" in host:
-        return "#mevabe #giadinh #muasamthongminh"
-    return "#muasamthongminh #reviewsanpham"
+    if category == "beauty":
+        return "#lamdep #muasamthongminh #dealhot"
+    return "#muasamthongminh #reviewsanpham #dealhot"
+
+
+def _home_appliance_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
+    hook = "Đồ gia dụng đáng mua là món giúp việc trong nhà nhẹ hơn thật, không chỉ vì đang giảm giá."
+    body = f"{name} đáng để xem nếu nhà đang cần một món hỗ trợ sinh hoạt hằng ngày rõ ràng. {_discount_hint(product)} {_price_hint(product)} {_merchant_hint(product)} Trước khi mua, nên đối chiếu kích thước/công suất, điều kiện bảo hành và review ảnh thật để tránh chọn nhầm mẫu không hợp nhu cầu."
+    return hook, body
+
+
+def _electronics_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
+    hook = "Đồ công nghệ nên mua khi nó giải quyết đúng nhu cầu: pin, bộ nhớ, bảo hành hoặc làm việc/học tập tiện hơn."
+    body = f"{name} phù hợp để cân nhắc nếu thông số thật khớp nhu cầu sử dụng, không chỉ vì tiêu đề sale. {_discount_hint(product)} {_price_hint(product)} Nên kiểm tra bảo hành, cấu hình chính, ảnh/review thật và so sánh giá với 1-2 shop khác trước khi chốt."
+    return hook, body
+
+
+def _baby_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
+    title = name.lower()
+    if "khăn" in title:
+        hook = "Khăn sữa là món dùng liên tục mỗi ngày: lau mặt, lau sữa, lót vai, mang theo khi ra ngoài."
+        body = f"{name} đáng để mẹ xem nếu cần khăn mềm, dễ giặt và đủ dùng xoay vòng. Nên ưu tiên chất liệu cotton/muslin/sợi tre, bề mặt mềm, ít bụi vải và kích thước hợp túi đồ của bé. {_price_hint(product)} {_merchant_hint(product)}"
+    else:
+        hook = "Đồ cho bé nên chọn theo tần suất dùng thật, chất liệu và độ dễ vệ sinh — không mua chỉ vì quảng cáo."
+        body = f"{name} là nhóm đồ mẹ nên xem kỹ chất liệu, kích thước, cách vệ sinh và đánh giá thật trước khi mua. {_price_hint(product)} {_merchant_hint(product)} Không kỳ vọng công dụng sức khỏe/phát triển nếu nhà bán không có thông tin kiểm chứng rõ ràng."
+    return hook, body
+
+
+def _generic_profit_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
+    hook = f"{name} chỉ đáng mua nếu nó giải quyết đúng một việc cụ thể trong nhà hoặc công việc hằng ngày."
+    body = f"Điểm nên kiểm tra trước là thông số chính, chất liệu/kích thước, review ảnh thật và chính sách đổi trả. {_discount_hint(product)} {_price_hint(product)} {_merchant_hint(product)} Nếu giá tốt nhưng thông tin sản phẩm mơ hồ thì nên bỏ qua."
+    return hook, body
 
 
 def generate_safe_facebook_draft(product: ProductCandidate) -> ContentDraft:
     name = _product_name(product)
     category = product.category.lower()
 
-    if category == "storage":
-        hook = "Góc đồ của bé rất dễ bừa chỉ sau một buổi. Một món nhỏ nhưng giúp mẹ đỡ mất thời gian tìm đồ."
-        body = f"Mẹ có thể tham khảo {name} nếu đang muốn sắp xếp bỉm, khăn, bình sữa hoặc đồ lặt vặt của bé gọn hơn. Điểm đáng chú ý là dùng cho việc tổ chức đồ trong nhà, không cần nói quá công dụng. {_price_hint(product)}"
-    elif category == "feeding":
-        hook = "Chuẩn bị đồ ăn dặm/bình sữa gọn hơn thì buổi sáng của mẹ cũng nhẹ hơn một chút."
-        body = f"{name} phù hợp để mẹ tham khảo khi cần chia, cất hoặc mang theo đồ dùng ăn dặm/bỉm sữa. Nên kiểm tra kỹ chất liệu, dung tích và đánh giá shop trước khi mua. {_price_hint(product)}"
-    elif category == "home_safety":
-        hook = "Khi bé bắt đầu bò/đi men, những góc nhỏ trong nhà cũng đáng để để ý hơn."
-        body = f"{name} là nhóm đồ hỗ trợ sắp xếp/an toàn sinh hoạt trong nhà. Mẹ nên xem kỹ kích thước, chất liệu và cách lắp trước khi chọn. {_price_hint(product)}"
-    elif category == "toy":
-        hook = "Một món đồ chơi tốt không cần quảng cáo quá đà — chỉ cần bé thích khám phá và mẹ thấy phù hợp."
-        body = f"{name} có thể là lựa chọn để mẹ tham khảo cho giờ chơi của bé. Nên chọn theo độ tuổi, chất liệu và mức độ an toàn, không nên kỳ vọng hay cam kết tác dụng phát triển vượt trội. {_price_hint(product)}"
-    elif category in {"electronics", "phone", "smartphone"}:
-        hook = "Mẹ hay chụp ảnh con mà ảnh mờ, thiếu sáng hoặc bé chạy quá nhanh?"
-        body = f"{name} là nhóm điện thoại nên chỉ đáng cân nhắc nếu mẹ thật sự cần camera tốt để lưu khoảnh khắc của con, pin khỏe cho ngày dài và bộ nhớ rộng cho ảnh/video gia đình. Trước khi mua, nên so sánh camera, pin, dung lượng và chính sách bảo hành thay vì chỉ nhìn cấu hình. {_price_hint(product)}"
-    elif category == "baby_care":
-        title = name.lower()
-        if "khăn" in title:
-            hook = "Khăn sữa là món dùng liên tục mỗi ngày: lau mặt, lau sữa, lót vai, mang theo khi ra ngoài. Chọn sai thì rất nhanh xù, thô hoặc bí da bé."
-            body = f"{name} đáng để mẹ xem nếu đang cần khăn mềm, dễ giặt và đủ dùng xoay vòng trong ngày. Nên ưu tiên chất liệu cotton/muslin/sợi tre, bề mặt mềm, ít bụi vải và kích thước phù hợp túi đồ của bé. {_price_hint(product)}"
-        else:
-            hook = "Đồ chăm bé nên bắt đầu từ việc dùng có thường xuyên không, có dễ vệ sinh không và có hợp da bé không."
-            body = f"{name} là nhóm đồ mẹ nên xem kỹ chất liệu, kích thước, cách vệ sinh và đánh giá thật trước khi mua. Không cần mua vì quảng cáo hay giá rẻ nếu chưa khớp nhu cầu hằng ngày của bé. {_price_hint(product)}"
+    if category in {"home_appliance", "home_living", "storage"}:
+        hook, body = _home_appliance_copy(product, name)
+    elif category in {"electronics", "phone", "smartphone", "laptop", "computer", "phone_accessory", "office_productivity"}:
+        hook, body = _electronics_copy(product, name)
+    elif category in {"baby_care", "mother_baby", "feeding", "toy"}:
+        hook, body = _baby_copy(product, name)
     else:
-        hook = f"Nếu đang cân nhắc {name}, hãy xem nó có thật sự giải quyết một nhu cầu cụ thể trong nhà không."
-        body = f"Nên kiểm tra kỹ chất liệu, kích thước, đánh giá shop và bối cảnh sử dụng trước khi mua. {_price_hint(product)}"
+        hook, body = _generic_profit_copy(product, name)
 
     cta = "Xem chi tiết sản phẩm, đánh giá shop và giá hiện tại ở link bên dưới nhé."
     disclosure = default_affiliate_disclosure() + "\n" + _interest_hashtags(product)

@@ -20,14 +20,20 @@ class ProductCandidate:
     commission_rate: Optional[float] = None
     image_url: str = ""
     image_path: str = ""
+    image_urls: List[str] = field(default_factory=list)
     video_url: str = ""
     video_path: str = ""
+    video_urls: List[str] = field(default_factory=list)
     affiliate_url: str = ""
     tracking_url: str = ""
+    short_url: str = ""
     notes: str = ""
     media_source: str = ""
     media_confidence: str = ""
     original_url: str = ""
+    campaign_id: str = ""
+    campaign_key: str = ""
+    link_status: str = ""
 
 
 @dataclass

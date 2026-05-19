@@ -1,0 +1,25 @@
+{
+  "sources": [
+    {
+      "name": "lazada_khan_sua",
+      "url": "https://www.lazada.vn/tag/khan-sua-em-be/",
+      "source": "LAZADA",
+      "category": "baby_care",
+      "campaign_key": "LAZADA"
+    },
+    {
+      "name": "lazada_yem_an_dam",
+      "url": "https://www.lazada.vn/tag/yem-an-dam-cho-be/",
+      "source": "LAZADA",
+      "category": "feeding",
+      "campaign_key": "LAZADA"
+    },
+    {
+      "name": "lazada_hop_dung_do_cho_be",
+      "url": "https://www.lazada.vn/tag/hop-dung-do-cho-be/",
+      "source": "LAZADA",
+      "category": "storage",
+      "campaign_key": "LAZADA"
+    }
+  ]
+}

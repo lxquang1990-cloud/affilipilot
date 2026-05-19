@@ -22,7 +22,8 @@ def test_validate_image_path(tmp_path):
 
 def test_batch_copies_media_into_manifest_and_photo_plan(tmp_path):
     img = tmp_path / "p.png"
-    img.write_bytes(PNG_1X1)
+    # PNG header with 800x800 dimensions is enough for media quality parser.
+    img.write_bytes(bytes.fromhex("89504e470d0a1a0a0000000d4948445200000320000003200806000000") + b"0" * 32)
     input_file = tmp_path / "links.txt"
     input_file.write_text(
         f"https://go.isclix.com/deep_link/a | title=Giỏ sắp xếp đồ bé | category=storage | price=129000 | image_path={img}",

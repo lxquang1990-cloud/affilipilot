@@ -7,7 +7,7 @@ from pathlib import Path
 
 from affilipilot.content.generator import generate_safe_facebook_draft
 from affilipilot.links.subid import build_utm, make_tracking_identity
-from affilipilot.media import prepare_product_media
+from affilipilot.media import prepare_product_media, prepare_product_media_gallery
 from affilipilot.scoring.product_score import score_product
 from affilipilot.sources.manual_input import parse_link_lines, parse_products_csv
 from affilipilot.telegram.cards import render_approval_card
@@ -44,7 +44,8 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
         post_path = out_dir / f"{identity.post_id}.post.txt"
         media_dir = out_dir / "media" / identity.post_id
         product_dict = asdict(product)
-        media_result = prepare_product_media(product_dict, media_dir)
+        gallery_results = prepare_product_media_gallery(product_dict, media_dir)
+        media_result = gallery_results[0] if gallery_results else prepare_product_media(product_dict, media_dir)
         card_path.write_text(card, encoding="utf-8")
         post_path.write_text(draft.full_text + "\n", encoding="utf-8")
         post = {
@@ -66,11 +67,15 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
                 "reasons": media_result.reasons,
                 "source": product.media_source,
                 "confidence": product.media_confidence,
+                "gallery": [asdict(item) for item in gallery_results],
+                "gallery_count": len(gallery_results),
+                "video_urls": product.video_urls or ([product.video_url] if product.video_url else []),
             },
             "files": {
                 "telegram_card": str(card_path),
                 "post_text": str(post_path),
                 "image": media_result.local_path if media_result.ok else "",
+                "images": [item.local_path for item in gallery_results if item.ok],
             },
         }
         posts.append(post)

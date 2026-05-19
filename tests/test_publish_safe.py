@@ -94,7 +94,7 @@ def test_publish_safe_blocks_market_fit_mismatch_even_if_plan_passes(tmp_path):
 
     assert not result["ok"]
     assert "market_fit:generic_mother_baby_template_mismatch" in result["reasons"]
-    assert "market_fit:missing_family_electronics_angle" in result["reasons"]
+    assert "quality:missing_electronics_benefit_angle" in result["reasons"]
 
 
 def test_publish_safe_blocks_demo_offer_even_if_plan_passes(tmp_path):

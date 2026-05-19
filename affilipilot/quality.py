@@ -26,6 +26,7 @@ TRUSTED_MEDIA_SOURCES = {
     "product_card_image",
     "user_uploaded_image",
     "brand_api_product_image",
+    "accesstrade_api",
 }
 
 @dataclass
@@ -83,7 +84,7 @@ def evaluate_quality_gate(post: dict[str, Any]) -> QualityGateResult:
         reasons.append("source_not_product_detail")
     if media_source and media_source not in TRUSTED_MEDIA_SOURCES:
         reasons.append(f"untrusted_media_source:{media_source}")
-    if media_confidence and str(media_confidence).lower() not in {"high", "trusted"}:
+    if media_confidence and str(media_confidence).lower() not in {"high", "trusted", "official"}:
         reasons.append(f"low_media_confidence:{media_confidence}")
     has_local_user_media = bool(product.get("image_path") or product.get("video_path"))
     has_legacy_safe_remote_media = bool(product.get("image_url")) and not source_url

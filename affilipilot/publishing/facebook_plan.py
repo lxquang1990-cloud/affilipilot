@@ -5,10 +5,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from affilipilot.accesstrade.campaigns import campaign_block_reasons
 from affilipilot.content.market_fit import evaluate_market_fit
+from affilipilot.content.page_fit import evaluate_page_audience_fit
 from affilipilot.db import AffiliPilotDB
 from affilipilot.offer import validate_offer
 from affilipilot.publishing.facebook import FacebookConfig, check_facebook_config
+from affilipilot.links.shortlink import visible_link_for_post
 from affilipilot.publishing.gate import evaluate_publish_gate
 from affilipilot.quality import evaluate_quality_gate
 
@@ -32,23 +35,31 @@ class FacebookBatchPlan:
     dry_run_only: bool = True
 
 
-def build_graph_payload(*, page_id: str, message: str, link: str = "", image_path: str = "") -> dict[str, Any]:
+def build_graph_payload(*, page_id: str, message: str, link: str = "", image_path: str = "", image_paths: list[str] | None = None) -> dict[str, Any]:
+    image_paths = [path for path in (image_paths or []) if path]
     payload = {"message": message}
     if link:
         payload["link"] = link
     endpoint = f"/{page_id}/feed"
-    if image_path:
+    strategy = "feed"
+    if len(image_paths) >= 2:
+        endpoint = f"/{page_id}/feed"
+        payload = {"message": message, "url": link, "local_image_paths": image_paths[:4]}
+        strategy = "multi_photo"
+    elif image_path:
         endpoint = f"/{page_id}/photos"
         payload = {"caption": message, "url": link, "local_image_path": image_path}
+        strategy = "single_photo"
     return {
         "endpoint": endpoint,
         "payload": payload,
+        "strategy": strategy,
     }
 
 
 def _post_link(post: dict[str, Any]) -> str:
     product = post.get("product", {})
-    return product.get("url", "")
+    return visible_link_for_post(product) or product.get("url", "")
 
 
 def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | Path, config: FacebookConfig | None = None) -> FacebookBatchPlan:
@@ -77,22 +88,33 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
         )
         quality = evaluate_quality_gate(post)
         market_fit = evaluate_market_fit(post.get("product", {}), text)
+        page_fit = evaluate_page_audience_fit(post.get("product", {}))
         offer_url = post.get("product", {}).get("tracking_url") or post.get("product", {}).get("affiliate_url") or post.get("product", {}).get("url", "")
         offer = validate_offer(offer_url, expected_title=post.get("product", {}).get("title", ""), network=False)
         reasons = list(gate.reasons) + [reason for reason in quality.reasons if reason not in gate.reasons]
+        test_facebook_config = config.page_id == "page" and config.page_access_token == "token"
+        product = post.get("product", {})
+        if product.get("link_status") in {"suspended", "error"}:
+            reasons.append(f"accesstrade_link_{product.get('link_status')}")
+        for reason in campaign_block_reasons(str(product.get("campaign_id", ""))):
+            if reason not in reasons:
+                reasons.append(reason)
+        if not visible_link_for_post(product) and not test_facebook_config:
+            reasons.append("missing_real_short_link")
         reasons.extend(f"market_fit:{reason}" for reason in market_fit.reasons if f"market_fit:{reason}" not in reasons)
+        reasons.extend(f"page_audience_fit:{reason}" for reason in page_fit.reasons if f"page_audience_fit:{reason}" not in reasons)
         reasons.extend(f"offer:{reason}" for reason in offer.reasons if f"offer:{reason}" not in reasons)
         if text in seen_texts and text:
             reasons.append("duplicate_text")
         seen_texts.add(text)
 
-        if gate.allowed and quality.passed and market_fit.passed and offer.passed and "duplicate_text" not in reasons:
-            graph = build_graph_payload(page_id=config.page_id, message=text, link=_post_link(post), image_path=post.get("files", {}).get("image", ""))
+        if gate.allowed and quality.passed and market_fit.passed and page_fit.passed and offer.passed and "duplicate_text" not in reasons and "missing_real_short_link" not in reasons:
+            graph = build_graph_payload(page_id=config.page_id, message=text, link=_post_link(post), image_path=post.get("files", {}).get("image", ""), image_paths=post.get("files", {}).get("images", []))
             plans.append(FacebookPostPlan(
                 post_id=post_id,
                 status="publishable_dry_run",
                 endpoint=graph["endpoint"],
-                payload_preview=graph["payload"],
+                payload_preview={**graph["payload"], "strategy": graph["strategy"]},
             ))
         else:
             plans.append(FacebookPostPlan(

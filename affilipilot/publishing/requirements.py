@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from affilipilot.media_quality import evaluate_media_quality
+
 AFFILIATE_HOST_HINTS = (
     "accesstrade.vn",
     "go.isclix.com",
@@ -92,4 +94,6 @@ def check_media(post: dict[str, Any]) -> RequirementCheck:
         value = product.get(key) or files.get(key.replace("_path", ""), "")
         if value and not Path(value).exists():
             reasons.append(f"media_path_not_found:{key}")
+    media_quality = evaluate_media_quality(post)
+    reasons.extend(reason for reason in media_quality.reasons if reason not in reasons)
     return RequirementCheck(passed=not reasons, reasons=reasons)

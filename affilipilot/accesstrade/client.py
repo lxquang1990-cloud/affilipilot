@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
@@ -70,11 +71,14 @@ class AccesstradeLinkResult:
     ok: bool
     original_url: str
     affiliate_url: str = ""
+    short_url: str = ""
     payload: dict[str, Any] | None = None
     status: int | None = None
     error: str = ""
     dry_run: bool = True
     campaign_key: str = ""
+    link_status: str = "unknown"
+    response_audit: dict[str, Any] | None = None
 
 def normalize_campaign_key(value: str) -> str:
     return "".join(ch if ch.isalnum() else "_" for ch in value.strip().upper()).strip("_")
@@ -176,9 +180,17 @@ def create_tracking_link(*, url: str, utm: dict[str, str], config: AccesstradeCo
             body = resp.read().decode("utf-8", errors="replace")
             parsed = json.loads(body) if body else {}
             affiliate_url = extract_affiliate_url(parsed)
-            if not affiliate_url and selected.campaign_id and selected.channel_id and str(parsed.get("status_code")) == "03":
-                affiliate_url = build_isclix_deep_link(url=url, campaign_id=selected.campaign_id, channel_id=selected.channel_id, utm=utm)
-            return AccesstradeLinkResult(ok=bool(affiliate_url), original_url=url, affiliate_url=affiliate_url, payload=payload, status=resp.status, error="" if affiliate_url else "affiliate_url_not_found", dry_run=False, campaign_key=selected.key)
+            short_url = extract_short_url(parsed)
+            response_audit = build_response_audit(parsed)
+            link_status = classify_tracking_response(parsed, affiliate_url=affiliate_url, short_url=short_url)
+            if not affiliate_url and short_url:
+                affiliate_url = short_url
+            # Do not synthesize a go.isclix deep_link when the official API refuses the campaign.
+            # Official successful responses include data.success_link[].aff_link and usually short_link.
+            # status_code=03 means "Campaign does not exists or not running" and must block publish.
+            ok = bool(affiliate_url) and link_status not in {"error", "suspended", "missing_link"}
+            error = "" if ok else tracking_response_error(parsed, link_status=link_status) or "affiliate_url_not_found"
+            return AccesstradeLinkResult(ok=ok, original_url=url, affiliate_url=affiliate_url, short_url=short_url, payload=payload, status=resp.status, error=error, dry_run=False, campaign_key=selected.key, link_status=link_status, response_audit=response_audit)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         try:
@@ -186,22 +198,96 @@ def create_tracking_link(*, url: str, utm: dict[str, str], config: AccesstradeCo
             message = parsed.get("message") or parsed.get("error") or body[:300]
         except json.JSONDecodeError:
             message = body[:300]
-        return AccesstradeLinkResult(ok=False, original_url=url, payload=payload, status=exc.code, error=str(message), dry_run=False, campaign_key=selected.key)
+        audit = build_response_audit(parsed) if 'parsed' in locals() and isinstance(parsed, dict) else None
+        return AccesstradeLinkResult(ok=False, original_url=url, payload=payload, status=exc.code, error=str(message), dry_run=False, campaign_key=selected.key, link_status="http_error", response_audit=audit)
 
-def extract_affiliate_url(response: dict[str, Any]) -> str:
+def _response_candidates(response: dict[str, Any]) -> list[dict[str, Any]]:
     candidates: list[Any] = []
-    for key in ("data", "result", "results"):
+    for key in ("data", "result", "results", "success_link"):
         value = response.get(key)
         if isinstance(value, list):
             candidates.extend(value)
         elif isinstance(value, dict):
             candidates.append(value)
+            for nested_key in ("success_link", "results", "items"):
+                nested = value.get(nested_key)
+                if isinstance(nested, list):
+                    candidates.extend(nested)
+                elif isinstance(nested, dict):
+                    candidates.append(nested)
     candidates.append(response)
-    for item in candidates:
-        if not isinstance(item, dict):
-            continue
-        for key in ("short_link", "link", "affiliate_url", "tracking_url", "url"):
+    return [item for item in candidates if isinstance(item, dict)]
+
+
+def _first_url_for_keys(response: dict[str, Any], keys: tuple[str, ...]) -> str:
+    for item in _response_candidates(response):
+        for key in keys:
             value = item.get(key)
             if isinstance(value, str) and value.startswith(("http://", "https://")):
                 return value
     return ""
+
+
+def extract_short_url(response: dict[str, Any]) -> str:
+    return _first_url_for_keys(response, ("short_link", "short_url", "shortlink", "shorten_url", "shortened_url"))
+
+
+def extract_affiliate_url(response: dict[str, Any]) -> str:
+    return _first_url_for_keys(response, ("aff_link", "affiliate_url", "tracking_url", "link", "url", "short_link", "short_url", "shortlink", "shorten_url", "shortened_url"))
+
+SECRET_KEY_RE = re.compile(r"(token|authorization|access_key|secret|password)", re.IGNORECASE)
+
+def redact_for_audit(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: ("[REDACTED]" if SECRET_KEY_RE.search(str(key)) else redact_for_audit(item)) for key, item in value.items()}
+    if isinstance(value, list):
+        return [redact_for_audit(item) for item in value]
+    if isinstance(value, str) and len(value) > 500:
+        return value[:500] + "...[truncated]"
+    return value
+
+def _list_field(response: dict[str, Any], key: str) -> list[Any]:
+    data = response.get("data") if isinstance(response.get("data"), dict) else {}
+    for owner in (data, response):
+        value = owner.get(key) if isinstance(owner, dict) else None
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            return [value]
+    return []
+
+def tracking_response_error(response: dict[str, Any], *, link_status: str = "") -> str:
+    if link_status == "suspended":
+        return "accesstrade_suspended_url"
+    if link_status == "error":
+        errors = _list_field(response, "error_link")
+        if errors:
+            return "accesstrade_error_link"
+    message = response.get("message") or response.get("error")
+    return str(message) if message else ""
+
+def classify_tracking_response(response: dict[str, Any], *, affiliate_url: str = "", short_url: str = "") -> str:
+    if _list_field(response, "suspend_url"):
+        return "suspended"
+    if _list_field(response, "error_link"):
+        return "error"
+    if affiliate_url and short_url:
+        return "success_with_shortlink"
+    if affiliate_url:
+        return "success_missing_shortlink"
+    if short_url:
+        return "shortlink_only"
+    return "missing_link"
+
+def build_response_audit(response: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "success": response.get("success"),
+        "status": response.get("status"),
+        "status_code": response.get("status_code"),
+        "has_affiliate_url": bool(extract_affiliate_url(response)),
+        "has_short_url": bool(extract_short_url(response)),
+        "success_link_count": len(_list_field(response, "success_link")),
+        "error_link_count": len(_list_field(response, "error_link")),
+        "suspend_url_count": len(_list_field(response, "suspend_url")),
+        "raw_redacted": redact_for_audit(response),
+    }
