@@ -39,6 +39,17 @@ HARD_BLOCK_TITLE_TERMS = (
     "mc queen",
     "tàu thomas",
     "shop gửi ngẫu nhiên",
+    "shop gửi mài ngẫu nhiên",
+    "gửi ngẫu nhiên",
+    "đồ chơi trang điểm",
+    "làm móng nail",
+    "nhện độc",
+    "nhân vật hoạt hình",
+    "dè chắn bùn xe đạp",
+    "chắn bùn xe đạp",
+    "tử thần",
+    "thần chết",
+    "lưỡi hái",
 )
 
 LOW_FIT_TITLE_TERMS = (

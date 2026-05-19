@@ -73,6 +73,8 @@ def _interest_hashtags(product: ProductCandidate) -> str:
         return "#sapxepnhacua #dodungchobe #mebim #nhacuasachgon"
     if category == "beauty":
         return "#lamdep #muasamthongminh #dealhot"
+    if category in {"sports", "football", "sport"} or "giày đá bóng" in text or "bóng đá" in text:
+        return "#bongda #giaydabong #thethao #muasamthongminh"
     return "#muasamthongminh #reviewsanpham #dealhot"
 
 
@@ -99,6 +101,12 @@ def _baby_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
     return hook, body
 
 
+def _sports_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
+    hook = "Giày đá bóng nên chọn theo mặt sân, độ ôm chân và cảm giác đệm — không chỉ nhìn mẫu mã."
+    body = f"{name} phù hợp để cân nhắc nếu bạn thường đá sân cỏ nhân tạo và cần đôi giày ôm chân, upper mềm, đệm êm khi di chuyển nhiều. {_price_hint(product)} {_merchant_hint(product)} Trước khi chốt, nên kiểm tra đúng size, form chân bè/thon, loại đinh TF, ảnh thật và chính sách đổi trả nếu mang chưa vừa."
+    return hook, body
+
+
 def _generic_profit_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
     hook = f"{name} chỉ đáng mua nếu nó giải quyết đúng một việc cụ thể trong nhà hoặc công việc hằng ngày."
     body = f"Điểm nên kiểm tra trước là thông số chính, chất liệu/kích thước, review ảnh thật và chính sách đổi trả. {_discount_hint(product)} {_price_hint(product)} {_merchant_hint(product)} Nếu giá tốt nhưng thông tin sản phẩm mơ hồ thì nên bỏ qua."
@@ -115,6 +123,8 @@ def generate_safe_facebook_draft(product: ProductCandidate) -> ContentDraft:
         hook, body = _electronics_copy(product, name)
     elif category in {"baby_care", "mother_baby", "feeding", "toy"}:
         hook, body = _baby_copy(product, name)
+    elif category in {"sports", "football", "sport"} or "giày đá bóng" in product.title.lower() or "bóng đá" in product.title.lower():
+        hook, body = _sports_copy(product, name)
     else:
         hook, body = _generic_profit_copy(product, name)
 
