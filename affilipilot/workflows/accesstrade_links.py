@@ -93,6 +93,7 @@ def convert_input_links(input_path: str | Path, out_path: str | Path, *, dry_run
             "result": result,
         }
         if result.get("ok") and result.get("affiliate_url"):
+            row["product"]["original_url"] = product.original_url or product.url
             row["product"]["affiliate_url"] = result["affiliate_url"]
             row["product"]["tracking_url"] = result["affiliate_url"]
             row["product"]["campaign_key"] = result.get("campaign_key", "")
@@ -132,7 +133,7 @@ def write_converted_input(converted_json: str | Path, out_path: str | Path) -> P
             product["image_urls"] = image_urls_meta
         if video_urls_meta:
             product["video_urls"] = video_urls_meta
-        for key in ("title", "category", "price_vnd", "commission_rate", "image_url", "image_path", "image_urls", "video_url", "video_path", "video_urls", "affiliate_url", "tracking_url", "short_url", "campaign_id", "campaign_key", "link_status", "notes"):
+        for key in ("title", "category", "price_vnd", "commission_rate", "image_url", "image_path", "image_urls", "video_url", "video_path", "video_urls", "affiliate_url", "tracking_url", "short_url", "campaign_id", "campaign_key", "link_status", "notes", "media_source", "media_confidence", "original_url"):
             value = product.get(key)
             if value not in (None, ""):
                 out_key = "price" if key == "price_vnd" else key

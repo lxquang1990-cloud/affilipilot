@@ -168,12 +168,21 @@ def enrich_batch_media(db_path: str | Path, *, batch_key: str, out_dir: str | Pa
             results.append({"post_id": post_id, "status": "already_has_media"})
             continue
         image_url = prod.get("image_url", "")
-        if not image_url:
+        try:
+            from affilipilot.media_quality import BAD_MEDIA_NAME_HINTS
+            has_bad_media = any(hint in f"{image_url} {prod.get('image_path', '')}".lower() for hint in BAD_MEDIA_NAME_HINTS)
+        except Exception:  # noqa: BLE001
+            has_bad_media = False
+        if not image_url or has_bad_media:
             try:
                 enriched = enrich_product_from_url(prod.get("original_url") or prod.get("url", ""), title=prod.get("title", ""), category=prod.get("category", "unknown"), source="AUTO")
                 image_url = enriched.get("image_url", "")
                 if image_url:
                     prod["image_url"] = image_url
+                    prod["image_urls"] = enriched.get("image_urls") or prod.get("image_urls", [])
+                    prod["media_source"] = enriched.get("media_source") or ("shopee_pdp" if "shopee_product_media" in enriched.get("notes", "") else prod.get("media_source", ""))
+                    prod["media_confidence"] = enriched.get("media_confidence") or ("official" if prod.get("media_source") == "shopee_pdp" else prod.get("media_confidence", ""))
+                    prod["video_urls"] = enriched.get("video_urls") or prod.get("video_urls", [])
             except Exception as exc:
                 results.append({"post_id": post_id, "status": "enrich_failed", "reason": type(exc).__name__})
         media_dir = out_dir / "media" / post_id
