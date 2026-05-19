@@ -1,0 +1,20 @@
+{
+  "keywords": [
+    {"keyword": "hộp đựng đồ gầm giường", "category": "home_storage", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "kệ để đồ nhà tắm", "category": "home_storage", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "đèn ngủ cảm biến", "category": "home_utility", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "máy hút bụi cầm tay", "category": "home_appliance", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "bình giữ nhiệt inox", "category": "kitchen", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "hộp cơm giữ nhiệt", "category": "kitchen", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "giá treo nắp nồi", "category": "kitchen", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "túi đựng giày du lịch", "category": "travel_storage", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "đèn bàn học", "category": "study_office", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "ghế công thái học", "category": "study_office", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "quạt tích điện", "category": "home_appliance", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "máy xay mini", "category": "kitchen_appliance", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "ổ cắm chống giật", "category": "home_safety", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "camera em bé", "category": "baby_monitor", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "ghế ăn dặm", "category": "baby_gear", "domains": ["shopee.vn", "lazada.vn"]},
+    {"keyword": "xe đẩy gấp gọn", "category": "baby_gear", "domains": ["shopee.vn", "lazada.vn"]}
+  ]
+}
