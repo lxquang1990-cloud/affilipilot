@@ -27,6 +27,8 @@ TRUSTED_MEDIA_SOURCES = {
     "user_uploaded_image",
     "brand_api_product_image",
     "accesstrade_api",
+    "shopee_pdp",
+    "lazada_pdp",
 }
 
 @dataclass
