@@ -4,23 +4,28 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-
-MOTHER_BABY_CATEGORIES = {"baby_care", "feeding", "toy", "home_safety", "storage"}
+MOTHER_BABY_CATEGORIES = {"baby_care", "feeding", "toy", "baby_play", "mother_baby", "home_safety", "storage"}
 TECH_CATEGORIES = {"electronics", "phone", "smartphone", "laptop", "software"}
-
+PAGE_AUDIENCE_BY_PAGE_NAME = {
+    "itnews vietnam": "tech",
+    "itnews": "tech",
+    "nâng niu trái ngọt tình yêu": "mother_baby",
+}
 
 @dataclass
 class PageAudienceFitResult:
     passed: bool
     reasons: list[str] = field(default_factory=list)
 
-
 def configured_page_audience() -> str:
     return os.environ.get("AFFILIPILOT_PAGE_AUDIENCE", "profit_first").strip().lower() or "profit_first"
 
+def audience_from_page_name(page_name: str) -> str:
+    normalized = " ".join((page_name or "").strip().lower().split())
+    return PAGE_AUDIENCE_BY_PAGE_NAME.get(normalized, "")
 
-def evaluate_page_audience_fit(product: dict[str, Any], *, page_audience: str | None = None) -> PageAudienceFitResult:
-    audience = (page_audience or configured_page_audience()).strip().lower()
+def evaluate_page_audience_fit(product: dict[str, Any], *, page_audience: str | None = None, page_name: str = "") -> PageAudienceFitResult:
+    audience = (page_audience or audience_from_page_name(page_name) or configured_page_audience()).strip().lower()
     category = str(product.get("category", "unknown")).strip().lower()
     title = str(product.get("title", "")).lower()
     reasons: list[str] = []

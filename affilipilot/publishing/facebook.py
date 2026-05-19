@@ -18,6 +18,7 @@ from affilipilot.security import redact_for_audit
 class FacebookConfig:
     page_id: str = ""
     page_access_token: str = ""
+    page_name: str = ""
 
     @classmethod
     def from_env(cls) -> "FacebookConfig":
@@ -25,6 +26,7 @@ class FacebookConfig:
         return cls(
             page_id=os.environ.get("FACEBOOK_PAGE_ID", "") or env_file.get("FACEBOOK_PAGE_ID", ""),
             page_access_token=os.environ.get("FACEBOOK_PAGE_ACCESS_TOKEN", "") or env_file.get("FACEBOOK_PAGE_ACCESS_TOKEN", ""),
+            page_name=os.environ.get("FACEBOOK_PAGE_NAME", "") or env_file.get("FACEBOOK_PAGE_NAME", ""),
         )
 
 

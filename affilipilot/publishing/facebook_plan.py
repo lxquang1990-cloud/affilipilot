@@ -92,7 +92,7 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
         )
         quality = evaluate_quality_gate(post)
         market_fit = evaluate_market_fit(post.get("product", {}), text)
-        page_fit = evaluate_page_audience_fit(post.get("product", {}))
+        page_fit = evaluate_page_audience_fit(post.get("product", {}), page_name=config.page_name)
         offer_url = post.get("product", {}).get("tracking_url") or post.get("product", {}).get("affiliate_url") or post.get("product", {}).get("url", "")
         offer = validate_offer(offer_url, expected_title=post.get("product", {}).get("title", ""), network=False)
         reasons = list(gate.reasons) + [reason for reason in quality.reasons if reason not in gate.reasons]

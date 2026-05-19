@@ -107,9 +107,14 @@ def _sports_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
     return hook, body
 
 
+def _baby_pool_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
+    hook = "Trời nóng mà nhà có khoảng sân/góc ban công an toàn thì một chiếc bể bơi gấp gọn cho bé rất đáng cân nhắc."
+    body = f"{name} hợp với gia đình muốn cho bé chơi nước tại nhà nhưng vẫn cần dễ cất, dễ xả nước và không chiếm chỗ cố định. Trước khi mua nên kiểm tra kích thước khi mở ra, độ dày PVC, đáy/chân bể, van xả nước và review ảnh thật để chọn đúng size cho không gian nhà mình. {_price_hint(product)} {_merchant_hint(product)} Luôn cần người lớn quan sát khi bé chơi nước, kể cả bể nông."
+    return hook, body
+
 def _generic_profit_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
-    hook = f"{name} chỉ đáng mua nếu nó giải quyết đúng một việc cụ thể trong nhà hoặc công việc hằng ngày."
-    body = f"Điểm nên kiểm tra trước là thông số chính, chất liệu/kích thước, review ảnh thật và chính sách đổi trả. {_discount_hint(product)} {_price_hint(product)} {_merchant_hint(product)} Nếu giá tốt nhưng thông tin sản phẩm mơ hồ thì nên bỏ qua."
+    hook = f"{name} là món nên xem kỹ nhu cầu sử dụng thật trước khi chốt mua."
+    body = f"Hãy ưu tiên thông tin cụ thể: kích thước, chất liệu, cách dùng, ảnh/review thật và chính sách đổi trả. {_discount_hint(product)} {_price_hint(product)} {_merchant_hint(product)} Nếu giá tốt nhưng mô tả sản phẩm mơ hồ thì nên bỏ qua."
     return hook, body
 
 
@@ -121,6 +126,8 @@ def generate_safe_facebook_draft(product: ProductCandidate) -> ContentDraft:
         hook, body = _home_appliance_copy(product, name)
     elif category in {"electronics", "phone", "smartphone", "laptop", "computer", "phone_accessory", "office_productivity"}:
         hook, body = _electronics_copy(product, name)
+    elif category == "baby_play" or any(term in product.title.lower() for term in ("bể bơi", "hồ bơi", "cầu trượt")):
+        hook, body = _baby_pool_copy(product, name)
     elif category in {"baby_care", "mother_baby", "feeding", "toy"}:
         hook, body = _baby_copy(product, name)
     elif category in {"sports", "football", "sport"} or "giày đá bóng" in product.title.lower() or "bóng đá" in product.title.lower():

@@ -5,6 +5,8 @@ import pytest
 from affilipilot.content.page_fit import evaluate_page_audience_fit
 from affilipilot.links.shortlink import visible_link_for_post
 from affilipilot.publishing.facebook import _caption_link
+from affilipilot.models import ProductCandidate
+from affilipilot.content.generator import generate_safe_facebook_draft
 from affilipilot.publishing.facebook_plan import build_graph_payload
 
 
@@ -28,6 +30,18 @@ def test_page_audience_fit_blocks_baby_product_on_tech_page():
     result = evaluate_page_audience_fit({"category": "toy", "title": "Đồ chơi cho bé"}, page_audience="tech")
     assert not result.passed
     assert "page_audience_tech_product_mother_baby" in result.reasons
+
+def test_page_audience_fit_infers_tech_from_page_name():
+    result = evaluate_page_audience_fit({"category": "baby_play", "title": "Bể bơi cho bé"}, page_name="ITNews Vietnam")
+    assert not result.passed
+    assert "page_audience_tech_product_mother_baby" in result.reasons
+
+def test_baby_pool_copy_is_specific_and_not_generic_template():
+    draft = generate_safe_facebook_draft(ProductCandidate(title="Bể bơi xếp gọn PVC an toàn cho bé", category="baby_play", price_vnd=999000, url="https://lazada.vn/p"))
+    text = draft.full_text
+    assert "chỉ đáng mua nếu nó giải quyết đúng" not in text
+    assert "người lớn quan sát" in text
+    assert "van xả nước" in text
 
 
 def test_multi_photo_plan_caps_at_four_images():
