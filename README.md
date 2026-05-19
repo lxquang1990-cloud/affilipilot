@@ -247,6 +247,7 @@ Latest local regression at README update time:
 
 - [`docs/operations.md`](docs/operations.md) — operator workflow
 - [`docs/quickstart.md`](docs/quickstart.md) — quick local start
+- [`docs/automation-first.md`](docs/automation-first.md) — event log, circuit breaker, tier scoring, seed/ROI automation
 - [`docs/compliance-policy-mom-baby.md`](docs/compliance-policy-mom-baby.md)
 - [`docs/tracking-strategy.md`](docs/tracking-strategy.md)
 - [`docs/publish-gate.md`](docs/publish-gate.md)

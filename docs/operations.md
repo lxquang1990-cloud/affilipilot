@@ -9,8 +9,9 @@ Default behavior is safe:
 - no real Accesstrade API call unless `accesstrade-convert --real` is used and secrets are configured
 - no real Facebook publish unless `facebook-publish-one` is explicitly run against a publishable dry-run plan
 - no direct Telegram Bot API call from delivery commands
-- no auto-approval
-- every Facebook publish path requires approval state + compliance pass + affiliate link + media + Facebook config
+- no open-ended auto-approval; any auto mode must be explicitly time-boxed and circuit-breaker protected
+- every Facebook publish path requires approval state or explicit test-window override + compliance pass + affiliate link + media + Facebook config
+- `/tmp/affilipilot.KILL` immediately pauses scheduler automation
 
 ## Primary local workflow
 
@@ -87,6 +88,42 @@ python3 -m affilipilot batch-status \
   --batch-key manual-001 \
   --facebook-plan data/runs/manual/manual-001-approved/facebook-plan.json
 ```
+
+## Automation operations
+
+Check circuit status:
+
+```bash
+python3 -m affilipilot circuit-status
+```
+
+Pause or resume automation:
+
+```bash
+python3 -m affilipilot kill-switch on --reason "operator pause"
+python3 -m affilipilot kill-switch off
+```
+
+Inspect automation/audit events:
+
+```bash
+python3 -m affilipilot event-log --limit 30
+```
+
+Score draft/seed inputs into automation tiers:
+
+```bash
+python3 -m affilipilot score-tier --input data/runs/seed-hunter/seed-hunter.input.txt
+```
+
+Record or summarize local conversion/ROI data:
+
+```bash
+python3 -m affilipilot conversion-record --sub-id ap_b001_d001_20260519 --order-id order-001 --status approved --commission-vnd 12000 --order-value-vnd 200000
+python3 -m affilipilot conversion-summary
+```
+
+Full automation guide: [`automation-first.md`](automation-first.md).
 
 ## Smoke test
 

@@ -114,7 +114,36 @@ python3 -m affilipilot batch-status \
   --facebook-plan data/runs/manual/manual-001-approved/facebook-plan.json
 ```
 
-## 9. Verify everything
+## 9. Automation controls
+
+Check the auto-publish circuit breaker:
+
+```bash
+python3 -m affilipilot circuit-status
+```
+
+Render structured automation events:
+
+```bash
+python3 -m affilipilot event-log --limit 10
+```
+
+Pause/resume automation with the kill switch:
+
+```bash
+python3 -m affilipilot kill-switch on --reason "operator pause"
+python3 -m affilipilot kill-switch off
+```
+
+Score a seed/input file into automation tiers:
+
+```bash
+python3 -m affilipilot score-tier --input data/runs/seed-hunter/seed-hunter.input.txt
+```
+
+See [`automation-first.md`](automation-first.md) for the full automation model.
+
+## 10. Verify everything
 
 ```bash
 scripts/verify_all.sh
