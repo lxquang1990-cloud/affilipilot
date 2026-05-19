@@ -45,6 +45,14 @@ def test_baby_pool_copy_is_specific_and_not_generic_template():
     assert "van xả nước" in text
     assert "#chobevui" in text
 
+def test_baby_jumper_copy_is_specific_to_active_play():
+    draft = generate_safe_facebook_draft(ProductCandidate(title="Nhà nhún nhảy cho bé lưới bảo hộ kép an toàn", category="baby_play", url="https://shopee.vn/p"))
+    text = draft.full_text
+    assert "nghịch nước" not in text
+    assert "lưới bảo hộ" in text
+    assert "tải trọng" in text
+    assert "người lớn quan sát" in text
+
 
 def test_multi_photo_plan_caps_at_four_images():
     graph = build_graph_payload(
