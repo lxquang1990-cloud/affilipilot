@@ -14,7 +14,10 @@ def is_short_link(url: str) -> bool:
         return False
     base = configured_short_base()
     parsed = urlparse(url)
+    host = parsed.netloc.lower().removeprefix("www.")
     if base and url.startswith(base + "/go/"):
+        return True
+    if host == "shorten.asia" and parsed.path.strip("/"):
         return True
     return parsed.path.startswith("/go/") and len(parsed.path.strip("/").split("/")) >= 2
 
