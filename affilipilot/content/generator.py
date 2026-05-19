@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from affilipilot.content.compliance import check_mom_baby_compliance, default_affiliate_disclosure
 from urllib.parse import urlparse
 
@@ -27,6 +28,36 @@ def _price_hint(product: ProductCandidate) -> str:
         return f"Giá tham khảo khoảng {price}đ, có thể thay đổi theo thời điểm."
     return "Giá/ưu đãi có thể thay đổi theo thời điểm, nên kiểm tra lại trước khi mua."
 
+
+def _note_number(product: ProductCandidate, key: str) -> float | None:
+    match = re.search(rf"(?:^|;){re.escape(key)}=([0-9]+(?:\.[0-9]+)?)", product.notes.lower())
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
+
+def _format_count(value: float) -> str:
+    if value >= 1000:
+        rounded = int(value // 1000)
+        return f"{rounded}k+"
+    return str(int(value))
+
+def _social_proof_hint(product: ProductCandidate) -> str:
+    rating = _note_number(product, "rating")
+    sold = _note_number(product, "sold") or _note_number(product, "historical_sold")
+    reviews = _note_number(product, "review_count")
+    pieces: list[str] = []
+    if rating and rating >= 4.7:
+        pieces.append(f"rating khoảng {rating:.1f}/5")
+    if sold and sold >= 100:
+        pieces.append(f"{_format_count(sold)} lượt bán")
+    if reviews and reviews >= 30:
+        pieces.append(f"{_format_count(reviews)} đánh giá")
+    if not pieces:
+        return ""
+    return "⭐ Tín hiệu tham khảo: " + ", ".join(pieces) + ". Vẫn nên mở review ảnh thật để kiểm tra trước khi chốt."
 
 def _discount_hint(product: ProductCandidate) -> str:
     text = product.notes.lower()
@@ -66,7 +97,11 @@ def _interest_hashtags(product: ProductCandidate) -> str:
     if category in {"home_appliance", "home_living"}:
         return "#dogiadung #nhacuasachgon #dealgiadung"
     if category == "baby_play" or any(term in text for term in ("bể bơi", "hồ bơi", "cầu trượt", "nhà nhún", "nhún nhảy", "xe tập đi", "xe chòi chân")):
-        return "#chobevui #mevabe #dodungchobe"
+        if "xe tập đi" in text or "xe chòi chân" in text:
+            return "#xetapdi #xechoichan #mevabe #dodungchobe #shopee"
+        if "nhà nhún" in text or "nhún nhảy" in text:
+            return "#nhanhun #chobevui #mevabe #dodungchobe #shopee"
+        return "#chobevui #mevabe #dodungchobe #shopee"
     if "khăn sữa" in text or "khan sua" in text or category == "baby_care":
         return "#khansua #mevabe #dodungchobe"
     if "feeding" in text or category == "feeding":
@@ -118,8 +153,10 @@ def _baby_play_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
         hook = "Bé nhiều năng lượng mà nhà chưa tiện ra khu vui chơi thì nhà nhún trong nhà là món đáng cân nhắc."
         body = f"{name} phù hợp cho bé vận động tại nhà, nhất là những lúc trời mưa/nắng gắt hoặc ba mẹ muốn bé chơi trong tầm mắt. Điểm cần xem kỹ là kích thước khi lắp, tải trọng phù hợp, độ chắc của khung, lưới bảo hộ quanh thành, bề mặt tiếp đất và mức ồn khi bé nhún. {_price_hint(product)} {_merchant_hint(product)} Lưu ý: nên đặt trên mặt phẳng, tránh cạnh bàn/tường cứng và luôn có người lớn quan sát khi bé chơi."
     elif "xe tập đi" in title or "xe chòi chân" in title:
-        hook = "Giai đoạn bé bắt đầu thích đứng, đẩy và chòi chân thì món hỗ trợ vận động nên chọn kỹ hơn là chọn theo màu sắc."
-        body = f"{name} đáng cân nhắc nếu gia đình muốn một món dùng được nhiều giai đoạn: tập đứng/đẩy đi, chòi chân và chơi bảng âm nhạc. Điểm cần xem kỹ là độ vững của bánh, khả năng chống lật, chiều cao/tư thế tay cầm, bề mặt nhựa có bo góc không, pin/âm thanh có dễ tắt không và sản phẩm có phù hợp độ tuổi của bé không. {_price_hint(product)} {_merchant_hint(product)} Lưu ý: xe tập đi không thay người lớn trông bé; nên dùng trên mặt phẳng, tránh cầu thang/bậc cửa và không để bé chơi một mình."
+        hook = "Bé tới tuổi vịn đứng, thích đẩy đồ đi quanh nhà là ba mẹ bắt đầu phải để mắt nhiều hơn 😄"
+        proof = _social_proof_hint(product)
+        proof_text = (proof + " ") if proof else ""
+        body = f"{name} hợp nếu nhà muốn một món chơi được lâu hơn một chút: lúc đầu bé vịn/đẩy tập bước, lớn hơn có thể chuyển sang chòi chân, kèm bảng nhạc và đèn để bé đỡ nhanh chán. Mấy điểm nên check trước là bánh có chắc không, xe có dễ lật không, tay cầm có vừa tầm bé không, phần nhựa có bo cạnh ổn không và âm thanh có tắt được không. {proof_text}{_price_hint(product)} Lưu ý: xe tập đi không thay người lớn trông bé; nên dùng trên mặt phẳng, tránh cầu thang/bậc cửa và không để bé chơi một mình."
     elif "cầu trượt" in title:
         hook = "Một góc vận động nhỏ trong nhà giúp bé leo trèo, trượt và xả năng lượng mà không phải lúc nào cũng ra sân chơi."
         body = f"{name} đáng xem nếu nhà còn khoảng trống an toàn cho bé vận động mỗi ngày. Trước khi mua nên kiểm tra chiều cao trượt, độ bám của bậc leo, chất liệu nhựa, bo góc, tải trọng và review ảnh thật để tránh chọn mẫu quá nhỏ hoặc rung lắc. {_price_hint(product)} {_merchant_hint(product)} Vẫn nên đặt ở nơi thoáng, tránh vật cứng xung quanh và có người lớn quan sát."
@@ -151,7 +188,7 @@ def generate_safe_facebook_draft(product: ProductCandidate) -> ContentDraft:
     else:
         hook, body = _generic_profit_copy(product, name)
 
-    cta = "Xem chi tiết sản phẩm, đánh giá shop và giá hiện tại ở link bên dưới nhé."
+    cta = "Xem ảnh thật, review và giá hiện tại ở link bên dưới nhé 👇"
     disclosure = default_affiliate_disclosure() + "\n" + _interest_hashtags(product)
     compliance = check_mom_baby_compliance("\n\n".join([hook, body, cta, disclosure]), category=product.category)
     return ContentDraft(product=product, hook=hook, body=body, cta=cta, disclosure=disclosure, compliance=compliance)
