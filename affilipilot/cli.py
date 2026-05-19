@@ -17,7 +17,7 @@ from affilipilot.content.market_fit import evaluate_market_fit, render_market_fi
 from affilipilot.content.variants import generate_content_variants
 from affilipilot.marketplaces import classify_url, discovery_advice
 from affilipilot.offer import render_offer_validation, validate_offer
-from affilipilot.publishing.facebook import check_facebook_config, publish_multi_photo_post, publish_photo_post, publish_post
+from affilipilot.publishing.facebook import check_facebook_config, publish_multi_photo_post, publish_photo_post, publish_post, publish_video_post
 from affilipilot.publishing.facebook_plan import plan_facebook_batch, render_facebook_plan
 from affilipilot.publishing.facebook_token import check_facebook_token, render_facebook_token_report
 from affilipilot.publishing.facebook_token_manager import derive_page_token, exchange_short_token, inspect_current_page_token, refresh_from_user_token, render_token_manager_result
@@ -560,7 +560,9 @@ def cmd_facebook_publish_one(args: argparse.Namespace) -> int:
     if item.get("status") != "publishable_dry_run":
         raise SystemExit(f"Refusing publish; plan status is {item.get('status')}: {item.get('reasons')}")
     payload = item.get("payload_preview", {})
-    if payload.get("strategy") == "multi_photo":
+    if payload.get("strategy") == "video_primary":
+        result = publish_video_post(description=payload.get("description", ""), video_path=payload.get("local_video_path", ""), link=payload.get("url", ""))
+    elif payload.get("strategy") == "multi_photo":
         result = publish_multi_photo_post(message=payload.get("message", ""), image_paths=payload.get("local_image_paths", []), link=payload.get("url", ""))
     elif item.get("endpoint", "").endswith("/photos"):
         result = publish_photo_post(caption=payload.get("caption", ""), image_path=payload.get("local_image_path", ""), link=payload.get("url", ""))

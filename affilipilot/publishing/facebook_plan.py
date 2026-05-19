@@ -35,14 +35,18 @@ class FacebookBatchPlan:
     dry_run_only: bool = True
 
 
-def build_graph_payload(*, page_id: str, message: str, link: str = "", image_path: str = "", image_paths: list[str] | None = None) -> dict[str, Any]:
+def build_graph_payload(*, page_id: str, message: str, link: str = "", image_path: str = "", image_paths: list[str] | None = None, video_path: str = "") -> dict[str, Any]:
     image_paths = [path for path in (image_paths or []) if path]
     payload = {"message": message}
     if link:
         payload["link"] = link
     endpoint = f"/{page_id}/feed"
     strategy = "feed"
-    if len(image_paths) >= 2:
+    if video_path:
+        endpoint = f"/{page_id}/videos"
+        payload = {"description": message, "url": link, "local_video_path": video_path, "local_image_paths": image_paths[:4]}
+        strategy = "video_primary"
+    elif len(image_paths) >= 2:
         endpoint = f"/{page_id}/feed"
         payload = {"message": message, "url": link, "local_image_paths": image_paths[:4]}
         strategy = "multi_photo"
@@ -108,8 +112,16 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
             reasons.append("duplicate_text")
         seen_texts.add(text)
 
-        if gate.allowed and quality.passed and market_fit.passed and page_fit.passed and offer.passed and "duplicate_text" not in reasons and "missing_real_short_link" not in reasons:
-            graph = build_graph_payload(page_id=config.page_id, message=text, link=_post_link(post), image_path=post.get("files", {}).get("image", ""), image_paths=post.get("files", {}).get("images", []))
+        files = post.get("files", {})
+        video_available = bool(product.get("video_url") or product.get("video_urls"))
+        video_path = files.get("video", "") or product.get("video_path", "")
+        if video_available and not video_path:
+            reasons.append("video_available_but_not_publish_ready")
+        if video_path and not Path(video_path).exists():
+            reasons.append("video_path_not_found")
+
+        if gate.allowed and quality.passed and market_fit.passed and page_fit.passed and offer.passed and "duplicate_text" not in reasons and "missing_real_short_link" not in reasons and "video_available_but_not_publish_ready" not in reasons and "video_path_not_found" not in reasons:
+            graph = build_graph_payload(page_id=config.page_id, message=text, link=_post_link(post), image_path=files.get("image", ""), image_paths=files.get("images", []), video_path=video_path)
             plans.append(FacebookPostPlan(
                 post_id=post_id,
                 status="publishable_dry_run",

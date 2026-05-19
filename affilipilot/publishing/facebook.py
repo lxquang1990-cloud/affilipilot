@@ -166,6 +166,24 @@ def publish_photo_post(*, caption: str, image_path: str, link: str = "", config:
     return {**result, "endpoint": f"/{config.page_id}/photos"}
 
 
+def publish_video_post(*, description: str, video_path: str, link: str = "", config: FacebookConfig | None = None, timeout: int = 180) -> dict[str, Any]:
+    """Publish one local video to Facebook Page videos."""
+    config = config or FacebookConfig.from_env()
+    health = check_facebook_config(config)
+    if not health.verified:
+        raise RuntimeError("Facebook config is not verified: " + ",".join(health.reasons))
+    path = Path(video_path)
+    if not path.exists():
+        raise RuntimeError("Refusing to publish missing video file")
+    if not description.strip():
+        raise RuntimeError("Refusing to publish empty video description")
+    endpoint = f"https://graph.facebook.com/v19.0/{config.page_id}/videos"
+    caption_link = _caption_link(link)
+    description_text = description + (f"\n\nLink sản phẩm: {caption_link}" if caption_link else "")
+    result = _multipart_post(endpoint, fields={"description": description_text, "access_token": config.page_access_token}, files=[("source", path)], timeout=timeout)
+    return {**result, "endpoint": f"/{config.page_id}/videos"}
+
+
 def publish_multi_photo_post(*, message: str, image_paths: list[str], link: str = "", config: FacebookConfig | None = None, timeout: int = 90) -> dict[str, Any]:
     """Publish a Facebook feed post with multiple attached photos.
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from affilipilot.media import fetch_image
+from affilipilot.video_media import prepare_product_video
 from affilipilot.scanner.core import fetch_html, parse_products_from_html
 
 IMAGE_EXT_RE = re.compile(r'https?://[^"\'\s<>]+?\.(?:jpg|jpeg|png|webp)(?:\?[^"\'\s<>]*)?', re.I)
@@ -177,12 +178,22 @@ def enrich_batch_media(db_path: str | Path, *, batch_key: str, out_dir: str | Pa
                 results.append({"post_id": post_id, "status": "enrich_failed", "reason": type(exc).__name__})
         media_dir = out_dir / "media" / post_id
         media = fetch_image(image_url, media_dir, name_hint=prod.get("title") or post_id) if image_url else None
+        video_status = "no_video"
+        video_urls = prod.get("video_urls") or ([prod.get("video_url")] if prod.get("video_url") else [])
+        if video_urls and not (prod.get("video_path") or post.get("files", {}).get("video")):
+            video = prepare_product_video(prod, out_dir / "video" / post_id)
+            if video.ok:
+                prod["video_path"] = video.local_path
+                post.setdefault("files", {})["video"] = video.local_path
+                video_status = "video_ready"
+            else:
+                video_status = "video_missing:" + ",".join(video.reasons[:3])
         if media and media.ok:
             prod["image_path"] = media.local_path
             post.setdefault("files", {})["image"] = media.local_path
-            post["media"] = {"ok": True, "local_path": media.local_path, "media_type": media.media_type, "reasons": []}
+            post["media"] = {"ok": True, "local_path": media.local_path, "media_type": media.media_type, "reasons": [], "video_status": video_status}
             updated += 1
-            results.append({"post_id": post_id, "status": "media_ready", "image_url": image_url, "local_path": media.local_path})
+            results.append({"post_id": post_id, "status": "media_ready", "image_url": image_url, "local_path": media.local_path, "video_status": video_status})
         else:
             failed += 1
             results.append({"post_id": post_id, "status": "media_missing", "reasons": media.reasons if media else ["missing_image_url"]})
