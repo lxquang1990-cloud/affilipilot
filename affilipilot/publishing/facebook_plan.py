@@ -61,6 +61,17 @@ def build_graph_payload(*, page_id: str, message: str, link: str = "", image_pat
     }
 
 
+
+def _publish_text(post: dict[str, Any]) -> str:
+    post_file = Path(post.get("files", {}).get("post_text", ""))
+    artifact_text = post_file.read_text(encoding="utf-8", errors="ignore").strip() if post_file.exists() else ""
+    manifest_text = str(post.get("caption") or "").strip()
+    # Prefer the current manifest caption over a draft artifact. Manual edits and
+    # regenerated copy update the manifest first; stale `.post.txt` files must not
+    # leak old captions into Facebook payloads. Fall back to the artifact for
+    # legacy batches that do not carry `post.caption`.
+    return manifest_text or artifact_text
+
 def _post_link(post: dict[str, Any]) -> str:
     product = post.get("product", {})
     return visible_link_for_post(product) or product.get("url", "")
@@ -82,8 +93,7 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
         post_id = post["post_id"]
         approval = approvals.get(post_id, {})
         approved = approval.get("status") == "approved"
-        post_file = Path(post.get("files", {}).get("post_text", ""))
-        text = post_file.read_text(encoding="utf-8", errors="ignore").strip() if post_file.exists() else ""
+        text = _publish_text(post)
         gate = evaluate_publish_gate(
             post,
             approved=approved,

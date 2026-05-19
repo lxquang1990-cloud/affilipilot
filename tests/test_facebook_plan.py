@@ -1,5 +1,5 @@
 from affilipilot.publishing.facebook import FacebookConfig
-from affilipilot.publishing.facebook_plan import build_graph_payload, plan_facebook_batch, render_facebook_plan
+from affilipilot.publishing.facebook_plan import build_graph_payload, plan_facebook_batch, render_facebook_plan, _publish_text
 from affilipilot.workflows.approval import create_approval_batch, decide_post
 
 
@@ -47,3 +47,19 @@ def test_facebook_plan_blocks_market_fit_before_publish_safe(tmp_path):
     plan = plan_facebook_batch(db, batch_key="batch", out_path=tmp_path / "plan.json", config=FacebookConfig(page_id="page", page_access_token="token"))
     assert plan.publishable_count == 0
     assert any(reason.startswith("market_fit:") for reason in plan.plans[0].reasons)
+
+def test_publish_text_prefers_manifest_caption_over_stale_post_text(tmp_path):
+    stale_file = tmp_path / "stale.post.txt"
+    stale_file.write_text("Nội dung cũ chỉ đáng mua nếu nó giải quyết đúng một việc cụ thể.", encoding="utf-8")
+    post = {
+        "caption": "Caption mới tự nhiên hơn cho sản phẩm.",
+        "files": {"post_text": str(stale_file)},
+    }
+    text = _publish_text(post)
+    assert text == "Caption mới tự nhiên hơn cho sản phẩm."
+    assert "chỉ đáng mua" not in text
+
+def test_publish_text_falls_back_to_post_text_for_legacy_batches(tmp_path):
+    post_file = tmp_path / "post.txt"
+    post_file.write_text("Caption legacy trong file", encoding="utf-8")
+    assert _publish_text({"files": {"post_text": str(post_file)}}) == "Caption legacy trong file"
