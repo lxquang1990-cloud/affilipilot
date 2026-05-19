@@ -62,20 +62,22 @@ def _interest_hashtags(product: ProductCandidate) -> str:
     text = f"{link} {product.notes} {product.title} {product.category}".lower()
     category = product.category.lower()
     if "cellphones" in text or "cellphones" in host or category in {"electronics", "phone", "smartphone", "laptop", "computer"}:
-        return "#congnghe #muasamthongminh #dealcongnghe #reviewdientu"
+        return "#congnghe #dealcongnghe #reviewdientu"
     if category in {"home_appliance", "home_living"}:
-        return "#dogiadung #nhacuasachgon #muasamthongminh #dealgiadung"
+        return "#dogiadung #nhacuasachgon #dealgiadung"
+    if category == "baby_play" or any(term in text for term in ("bể bơi", "hồ bơi", "cầu trượt")):
+        return "#chobevui #mevabe #dodungchobe"
     if "khăn sữa" in text or "khan sua" in text or category == "baby_care":
-        return "#khansua #mevabe #dodungchobe #mebim"
+        return "#khansua #mevabe #dodungchobe"
     if "feeding" in text or category == "feeding":
-        return "#andam #mevabe #dodungchobe #mebim"
+        return "#andam #mevabe #dodungchobe"
     if "storage" in text or category == "storage":
-        return "#sapxepnhacua #dodungchobe #mebim #nhacuasachgon"
+        return "#sapxepnhacua #mevabe #nhacuasachgon"
     if category == "beauty":
-        return "#lamdep #muasamthongminh #dealhot"
+        return "#lamdep #dealhot"
     if category in {"sports", "football", "sport"} or "giày đá bóng" in text or "bóng đá" in text:
-        return "#bongda #giaydabong #thethao #muasamthongminh"
-    return "#muasamthongminh #reviewsanpham #dealhot"
+        return "#bongda #giaydabong #thethao"
+    return "#muasamthongminh #reviewsanpham"
 
 
 def _home_appliance_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
@@ -108,8 +110,8 @@ def _sports_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
 
 
 def _baby_pool_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
-    hook = "Trời nóng mà nhà có khoảng sân/góc ban công an toàn thì một chiếc bể bơi gấp gọn cho bé rất đáng cân nhắc."
-    body = f"{name} hợp với gia đình muốn cho bé chơi nước tại nhà nhưng vẫn cần dễ cất, dễ xả nước và không chiếm chỗ cố định. Trước khi mua nên kiểm tra kích thước khi mở ra, độ dày PVC, đáy/chân bể, van xả nước và review ảnh thật để chọn đúng size cho không gian nhà mình. {_price_hint(product)} {_merchant_hint(product)} Luôn cần người lớn quan sát khi bé chơi nước, kể cả bể nông."
+    hook = "Có những hôm nóng quá, cho bé nghịch nước ở nhà lại tiện hơn nhiều so với đưa ra bể công cộng."
+    body = f"{name} phù hợp nếu nhà có sân nhỏ, ban công rộng hoặc một góc phòng tắm đủ thoáng. Điểm đáng xem là bể gấp gọn được nên cất đỡ vướng, chất liệu PVC dễ lau rửa, có nhiều kích thước để chọn theo diện tích nhà. Trước khi chốt nên xem kỹ ảnh thật/review, kích thước khi bơm/mở ra, đáy bể có đủ chắc không và van xả nước có tiện không. {_price_hint(product)} {_merchant_hint(product)} Lưu ý quan trọng: bé chơi nước lúc nào cũng cần người lớn ngồi gần quan sát, kể cả bể nông."
     return hook, body
 
 def _generic_profit_copy(product: ProductCandidate, name: str) -> tuple[str, str]:

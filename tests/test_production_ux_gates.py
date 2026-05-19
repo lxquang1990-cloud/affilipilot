@@ -40,8 +40,10 @@ def test_baby_pool_copy_is_specific_and_not_generic_template():
     draft = generate_safe_facebook_draft(ProductCandidate(title="Bể bơi xếp gọn PVC an toàn cho bé", category="baby_play", price_vnd=999000, url="https://lazada.vn/p"))
     text = draft.full_text
     assert "chỉ đáng mua nếu nó giải quyết đúng" not in text
-    assert "người lớn quan sát" in text
+    assert "Điểm nên kiểm tra trước" not in text
+    assert "người lớn ngồi gần quan sát" in text
     assert "van xả nước" in text
+    assert "#chobevui" in text
 
 
 def test_multi_photo_plan_caps_at_four_images():
