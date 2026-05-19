@@ -1,0 +1,8 @@
+{
+  "auto_threshold": 0.85,
+  "soft_threshold": 0.70,
+  "manual_threshold": 0.50,
+  "soft_gate_cooldown_minutes": 60,
+  "max_auto_per_day": 20,
+  "max_auto_per_hour": 5
+}

@@ -17,6 +17,11 @@ from affilipilot.content.market_fit import evaluate_market_fit, render_market_fi
 from affilipilot.content.variants import generate_content_variants
 from affilipilot.marketplaces import classify_url, discovery_advice
 from affilipilot.offer import render_offer_validation, validate_offer
+from affilipilot.observability.circuit_breaker import check_circuit, render_circuit_status, set_kill_switch
+from affilipilot.observability.event_log import EventLog, read_events, render_events
+from affilipilot.scoring.confidence import compute_confidence
+from affilipilot.scoring.tier import classify_tier, load_tier_config, render_tier_result
+from affilipilot.analytics.conversions import render_conversion_summary, summarize_conversions, upsert_conversion
 from affilipilot.publishing.facebook import check_facebook_config, publish_gallery_comment, publish_multi_photo_post, publish_photo_post, publish_post, publish_video_post
 from affilipilot.publishing.facebook_plan import plan_facebook_batch, render_facebook_plan
 from affilipilot.publishing.facebook_token import check_facebook_token, render_facebook_token_report
@@ -715,6 +720,58 @@ def cmd_accesstrade_convert(args: argparse.Namespace) -> int:
         print(f"Converted input: {path}")
     return 0 if summary["failed_count"] == 0 else 2
 
+def cmd_event_log(args: argparse.Namespace) -> int:
+    print(render_events(read_events(args.path, limit=args.limit)))
+    return 0
+
+
+def cmd_circuit_status(args: argparse.Namespace) -> int:
+    status = check_circuit(state_path=args.state, kill_path=args.kill_path, event_log_path=args.event_log)
+    print(render_circuit_status(status))
+    return 0 if status.allowed else 2
+
+
+def cmd_kill_switch(args: argparse.Namespace) -> int:
+    enabled = args.action == "on"
+    status = set_kill_switch(enabled, kill_path=args.kill_path, event_log_path=args.event_log, reason=args.reason)
+    print(render_circuit_status(status))
+    return 0
+
+
+def cmd_score_tier(args: argparse.Namespace) -> int:
+    products = parse_link_lines(Path(args.input).read_text(encoding="utf-8"))
+    cfg = load_tier_config(args.config)
+    log = EventLog(args.event_log)
+    print(f"AffiliPilot tier scoring: {len(products)} products")
+    for product in products[: args.limit]:
+        score, signals = compute_confidence(product)
+        tier = classify_tier(score, signals, cfg)
+        log.event("draft_classified", title=product.title, url=product.url, score=score, tier=tier.value, signals=signals)
+        print(f"- {product.title or product.url}: {render_tier_result(score, tier, signals)}")
+    return 0
+
+
+def cmd_conversion_record(args: argparse.Namespace) -> int:
+    order = {
+        "sub_id": args.sub_id,
+        "order_id": args.order_id,
+        "order_status": args.status,
+        "commission_vnd": args.commission_vnd,
+        "order_value_vnd": args.order_value_vnd,
+        "draft_id": args.draft_id,
+        "post_id": args.post_id,
+        "campaign_id": args.campaign_id,
+    }
+    upsert_conversion(args.db, order)
+    print(render_conversion_summary(summarize_conversions(args.db)))
+    return 0
+
+
+def cmd_conversion_summary(args: argparse.Namespace) -> int:
+    print(render_conversion_summary(summarize_conversions(args.db)))
+    return 0
+
+
 def cmd_sprint0(args: argparse.Namespace) -> int:
     batch_key = args.batch_key or datetime.now().strftime("sprint0-%Y%m%d-%H%M%S")
     work_dir = Path(args.work_dir) / batch_key
@@ -745,6 +802,47 @@ def cmd_sprint0(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="AffiliPilot Lite CLI")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("event-log", help="Render structured AffiliPilot JSONL events")
+    p.add_argument("--path", default="data/logs/affilipilot-events.jsonl")
+    p.add_argument("--limit", type=int, default=30)
+    p.set_defaults(func=cmd_event_log)
+
+    p = sub.add_parser("circuit-status", help="Show auto-publish circuit breaker status")
+    p.add_argument("--state", default="data/auto_publish_state.json")
+    p.add_argument("--kill-path", default="/tmp/affilipilot.KILL")
+    p.add_argument("--event-log", default="data/logs/affilipilot-events.jsonl")
+    p.set_defaults(func=cmd_circuit_status)
+
+    p = sub.add_parser("kill-switch", help="Toggle auto-publish kill switch")
+    p.add_argument("action", choices=["on", "off"])
+    p.add_argument("--reason", default="operator")
+    p.add_argument("--kill-path", default="/tmp/affilipilot.KILL")
+    p.add_argument("--event-log", default="data/logs/affilipilot-events.jsonl")
+    p.set_defaults(func=cmd_kill_switch)
+
+    p = sub.add_parser("score-tier", help="Score input products and classify auto/soft/manual/blocked tiers; no publish")
+    p.add_argument("--input", required=True)
+    p.add_argument("--config", default="config/tier-config.json")
+    p.add_argument("--event-log", default="data/logs/affilipilot-events.jsonl")
+    p.add_argument("--limit", type=int, default=20)
+    p.set_defaults(func=cmd_score_tier)
+
+    p = sub.add_parser("conversion-record", help="Record one conversion/order row for ROI tracking")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--sub-id", required=True)
+    p.add_argument("--order-id", required=True)
+    p.add_argument("--status", default="pending")
+    p.add_argument("--commission-vnd", type=int, default=0)
+    p.add_argument("--order-value-vnd", type=int, default=0)
+    p.add_argument("--draft-id", default="")
+    p.add_argument("--post-id", default="")
+    p.add_argument("--campaign-id", default="")
+    p.set_defaults(func=cmd_conversion_record)
+
+    p = sub.add_parser("conversion-summary", help="Summarize local conversion/ROI table")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.set_defaults(func=cmd_conversion_summary)
 
     p = sub.add_parser("scan-products", help="Scan a page URL and extract product candidates into scan JSON")
     p.add_argument("--url", required=True)

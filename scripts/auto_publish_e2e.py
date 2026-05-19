@@ -10,6 +10,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+
+from affilipilot.observability.circuit_breaker import check_circuit
+from affilipilot.observability.event_log import EventLog
 
 DB = ROOT / "data/affilipilot.db"
 OUTBOX_DIR = ROOT / "data/outbox"
@@ -18,6 +22,7 @@ SOURCES = ROOT / "config/profit-scan-broader.json"
 STATE = ROOT / "data/auto_publish_state.json"
 LOG_DIR = ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
+EVENTS = EventLog(ROOT / "data/logs/affilipilot-events.jsonl")
 
 
 def now_utc() -> datetime:
@@ -65,8 +70,14 @@ def mark_delivered(outbox: Path, batch_key: str, post_id: str) -> None:
 
 
 def main() -> int:
+    circuit = check_circuit(state_path=STATE, event_log_path=ROOT / "data/logs/affilipilot-events.jsonl")
+    if not circuit.allowed:
+        EVENTS.event("auto_publish_blocked", reason=circuit.reason, kill_switch=circuit.kill_switch)
+        print(f"auto_publish_blocked:{circuit.reason}")
+        return 0
     state = load_state()
     if not state.get("enabled"):
+        EVENTS.event("auto_publish_disabled")
         print("auto_publish_disabled")
         return 0
     expires_at = datetime.fromisoformat(state["expires_at"])
@@ -75,6 +86,7 @@ def main() -> int:
         return 0
     slot = os.environ.get("AFFILIPILOT_SLOT") or now_utc().strftime("%H%M")
     batch_key = f"auto-{now_utc().strftime('%Y%m%d')}-{slot}"
+    EVENTS.event("auto_publish_started", batch_key=batch_key, slot=slot)
     work_dir = RUNS_DIR / batch_key
     outbox = OUTBOX_DIR / f"{batch_key}.json"
     publish_dir = work_dir / "publish"
@@ -94,6 +106,7 @@ def main() -> int:
     ]
     e2e = run(e2e_cmd, check=False)
     if e2e.returncode != 0:
+        EVENTS.event("auto_publish_no_publishable_batch", batch_key=batch_key, returncode=e2e.returncode)
         print("e2e_no_publishable_batch")
         return 0
 
@@ -125,8 +138,11 @@ def main() -> int:
         proc = run([sys.executable, "-m", "affilipilot.cli", "publish-safe", "--db", str(DB), "--plan", str(plan_path), "--post-id", post_id, "--outbox", str(outbox), "--batch-key", batch_key, "--out", str(out)], check=False)
         if proc.returncode == 0:
             published += 1
+            EVENTS.event("auto_publish_succeeded", batch_key=batch_key, post_id=post_id, result_path=str(out))
         else:
+            EVENTS.event("auto_publish_failed", batch_key=batch_key, post_id=post_id, returncode=proc.returncode)
             print(f"publish_failed:{post_id}")
+    EVENTS.event("auto_publish_done", batch_key=batch_key, published=published)
     print(f"auto_publish_done batch={batch_key} published={published}")
     return 0
 
