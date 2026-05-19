@@ -26,7 +26,7 @@ Implemented:
 - 7-day guarded auto-publish scheduler for a Facebook test window (`scripts/auto_publish_e2e.py`)
 - structured JSONL event log, circuit breaker, and `/tmp/affilipilot.KILL` kill switch
 - confidence scoring and tier classification (`auto`, `soft_gate`, `manual`, `blocked`)
-- Seed Hunter scaffold with curated keyword config, Shopee public API adapter, and seed-file fallback
+- Seed Hunter scaffold with curated keyword config, Shopee public API adapter, seed-file fallback, and seed-to-auto E2E workflow
 - readiness/doctor/campaign-status dashboards
 - budget tracker and daily digest/report skeletons
 
@@ -180,7 +180,18 @@ python3 scripts/seed_hunter.py \
   --limit 10
 ```
 
-Then feed the generated input into the normal conversion/E2E workflow.
+Then feed the generated input into the normal conversion/E2E workflow, or use the one-shot curated seed workflow:
+
+```bash
+python3 scripts/seed_to_auto_e2e.py \
+  --seed-file data/manual-seeds.input.txt \
+  --batch-key seed-auto-smoke \
+  --work-dir data/runs/seed-auto/seed-auto-smoke \
+  --limit 1 \
+  --campaign-key shopee
+```
+
+See [`docs/seed-source-upgrade.md`](docs/seed-source-upgrade.md).
 
 ## Main commands
 
@@ -248,6 +259,7 @@ Latest local regression at README update time:
 - [`docs/operations.md`](docs/operations.md) — operator workflow
 - [`docs/quickstart.md`](docs/quickstart.md) — quick local start
 - [`docs/automation-first.md`](docs/automation-first.md) — event log, circuit breaker, tier scoring, seed/ROI automation
+- [`docs/seed-source-upgrade.md`](docs/seed-source-upgrade.md) — curated seed file to validated/optional publish workflow
 - [`docs/compliance-policy-mom-baby.md`](docs/compliance-policy-mom-baby.md)
 - [`docs/tracking-strategy.md`](docs/tracking-strategy.md)
 - [`docs/publish-gate.md`](docs/publish-gate.md)
