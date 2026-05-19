@@ -53,6 +53,14 @@ def test_baby_jumper_copy_is_specific_to_active_play():
     assert "tải trọng" in text
     assert "người lớn quan sát" in text
 
+def test_baby_walker_copy_is_specific_to_walker_safety():
+    draft = generate_safe_facebook_draft(ProductCandidate(title="Xe tập đi 6IN1 đa năng GutyKids kết hợp xe chòi chân", category="baby_play", url="https://shopee.vn/p"))
+    text = draft.full_text
+    assert "bể" not in text.lower()
+    assert "chống lật" in text
+    assert "cầu thang" in text
+    assert "không để bé chơi một mình" in text
+
 
 def test_multi_photo_plan_caps_at_four_images():
     graph = build_graph_payload(

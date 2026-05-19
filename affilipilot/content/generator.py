@@ -65,7 +65,7 @@ def _interest_hashtags(product: ProductCandidate) -> str:
         return "#congnghe #dealcongnghe #reviewdientu"
     if category in {"home_appliance", "home_living"}:
         return "#dogiadung #nhacuasachgon #dealgiadung"
-    if category == "baby_play" or any(term in text for term in ("bể bơi", "hồ bơi", "cầu trượt", "nhà nhún", "nhún nhảy")):
+    if category == "baby_play" or any(term in text for term in ("bể bơi", "hồ bơi", "cầu trượt", "nhà nhún", "nhún nhảy", "xe tập đi", "xe chòi chân")):
         return "#chobevui #mevabe #dodungchobe"
     if "khăn sữa" in text or "khan sua" in text or category == "baby_care":
         return "#khansua #mevabe #dodungchobe"
@@ -117,6 +117,9 @@ def _baby_play_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
     elif "nhà nhún" in title or "nhún nhảy" in title:
         hook = "Bé nhiều năng lượng mà nhà chưa tiện ra khu vui chơi thì nhà nhún trong nhà là món đáng cân nhắc."
         body = f"{name} phù hợp cho bé vận động tại nhà, nhất là những lúc trời mưa/nắng gắt hoặc ba mẹ muốn bé chơi trong tầm mắt. Điểm cần xem kỹ là kích thước khi lắp, tải trọng phù hợp, độ chắc của khung, lưới bảo hộ quanh thành, bề mặt tiếp đất và mức ồn khi bé nhún. {_price_hint(product)} {_merchant_hint(product)} Lưu ý: nên đặt trên mặt phẳng, tránh cạnh bàn/tường cứng và luôn có người lớn quan sát khi bé chơi."
+    elif "xe tập đi" in title or "xe chòi chân" in title:
+        hook = "Giai đoạn bé bắt đầu thích đứng, đẩy và chòi chân thì món hỗ trợ vận động nên chọn kỹ hơn là chọn theo màu sắc."
+        body = f"{name} đáng cân nhắc nếu gia đình muốn một món dùng được nhiều giai đoạn: tập đứng/đẩy đi, chòi chân và chơi bảng âm nhạc. Điểm cần xem kỹ là độ vững của bánh, khả năng chống lật, chiều cao/tư thế tay cầm, bề mặt nhựa có bo góc không, pin/âm thanh có dễ tắt không và sản phẩm có phù hợp độ tuổi của bé không. {_price_hint(product)} {_merchant_hint(product)} Lưu ý: xe tập đi không thay người lớn trông bé; nên dùng trên mặt phẳng, tránh cầu thang/bậc cửa và không để bé chơi một mình."
     elif "cầu trượt" in title:
         hook = "Một góc vận động nhỏ trong nhà giúp bé leo trèo, trượt và xả năng lượng mà không phải lúc nào cũng ra sân chơi."
         body = f"{name} đáng xem nếu nhà còn khoảng trống an toàn cho bé vận động mỗi ngày. Trước khi mua nên kiểm tra chiều cao trượt, độ bám của bậc leo, chất liệu nhựa, bo góc, tải trọng và review ảnh thật để tránh chọn mẫu quá nhỏ hoặc rung lắc. {_price_hint(product)} {_merchant_hint(product)} Vẫn nên đặt ở nơi thoáng, tránh vật cứng xung quanh và có người lớn quan sát."
@@ -139,7 +142,7 @@ def generate_safe_facebook_draft(product: ProductCandidate) -> ContentDraft:
         hook, body = _home_appliance_copy(product, name)
     elif category in {"electronics", "phone", "smartphone", "laptop", "computer", "phone_accessory", "office_productivity"}:
         hook, body = _electronics_copy(product, name)
-    elif category == "baby_play" or any(term in product.title.lower() for term in ("bể bơi", "hồ bơi", "cầu trượt", "nhà nhún", "nhún nhảy")):
+    elif category == "baby_play" or any(term in product.title.lower() for term in ("bể bơi", "hồ bơi", "cầu trượt", "nhà nhún", "nhún nhảy", "xe tập đi", "xe chòi chân")):
         hook, body = _baby_play_copy(product, name)
     elif category in {"baby_care", "mother_baby", "feeding", "toy"}:
         hook, body = _baby_copy(product, name)
