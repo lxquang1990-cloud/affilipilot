@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 from typing import Any
 
-from affilipilot.media import fetch_image
+from affilipilot.media import fetch_image, prepare_product_media_gallery
 from affilipilot.video_media import prepare_product_video
 from affilipilot.scanner.core import fetch_html, parse_products_from_html
 
@@ -164,7 +164,8 @@ def enrich_batch_media(db_path: str | Path, *, batch_key: str, out_dir: str | Pa
     for post in manifest.get("posts", [])[:limit]:
         prod = post.get("product", {})
         post_id = post.get("post_id", "post")
-        if prod.get("image_path") or post.get("files", {}).get("image") or post.get("media", {}).get("ok"):
+        existing_images = post.get("files", {}).get("images") or []
+        if (prod.get("image_path") or post.get("files", {}).get("image") or post.get("media", {}).get("ok")) and (existing_images or not prod.get("image_urls")):
             results.append({"post_id": post_id, "status": "already_has_media"})
             continue
         image_url = prod.get("image_url", "")
@@ -186,7 +187,8 @@ def enrich_batch_media(db_path: str | Path, *, batch_key: str, out_dir: str | Pa
             except Exception as exc:
                 results.append({"post_id": post_id, "status": "enrich_failed", "reason": type(exc).__name__})
         media_dir = out_dir / "media" / post_id
-        media = fetch_image(image_url, media_dir, name_hint=prod.get("title") or post_id) if image_url else None
+        gallery_results = prepare_product_media_gallery(prod, media_dir) if (prod.get("image_urls") or prod.get("image_url")) else []
+        media = gallery_results[0] if gallery_results else (fetch_image(image_url, media_dir, name_hint=prod.get("title") or post_id) if image_url else None)
         video_status = "no_video"
         video_urls = prod.get("video_urls") or ([prod.get("video_url")] if prod.get("video_url") else [])
         if video_urls and not (prod.get("video_path") or post.get("files", {}).get("video")):
@@ -200,7 +202,8 @@ def enrich_batch_media(db_path: str | Path, *, batch_key: str, out_dir: str | Pa
         if media and media.ok:
             prod["image_path"] = media.local_path
             post.setdefault("files", {})["image"] = media.local_path
-            post["media"] = {"ok": True, "local_path": media.local_path, "media_type": media.media_type, "reasons": [], "video_status": video_status}
+            post.setdefault("files", {})["images"] = [item.local_path for item in gallery_results if item.ok]
+            post["media"] = {"ok": True, "local_path": media.local_path, "media_type": media.media_type, "reasons": [], "video_status": video_status, "gallery_count": len(post.get("files", {}).get("images", []))}
             updated += 1
             results.append({"post_id": post_id, "status": "media_ready", "image_url": image_url, "local_path": media.local_path, "video_status": video_status})
         else:
