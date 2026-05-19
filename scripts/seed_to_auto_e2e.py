@@ -79,7 +79,7 @@ def main() -> int:
     seed_input = Path(hunter_summary["input_path"])
     converted_json = work_dir / "accesstrade-converted.json"
     converted_input = work_dir / "converted.input.txt"
-    convert_cmd = [sys.executable, "-m", "affilipilot.cli", "accesstrade-convert", "--input", str(seed_input), "--out", str(converted_json), "--write-input", str(converted_input), "--limit", str(args.limit)]
+    convert_cmd = [sys.executable, "-m", "affilipilot", "accesstrade-convert", "--input", str(seed_input), "--out", str(converted_json), "--write-input", str(converted_input), "--limit", str(args.limit)]
     if args.real_accesstrade:
         convert_cmd.append("--real")
     if args.campaign_key:
@@ -92,10 +92,10 @@ def main() -> int:
         return 0
 
     draft_dir = work_dir / "drafts"
-    run([sys.executable, "-m", "affilipilot.cli", "draft-links", "--input", str(converted_input), "--work-dir", str(draft_dir), "--db", args.db, "--batch-key", batch_key, "--limit", str(args.limit), "--outbox", str(outbox)], check=True)
+    run([sys.executable, "-m", "affilipilot", "draft-links", "--input", str(converted_input), "--work-dir", str(draft_dir), "--db", args.db, "--batch-key", batch_key, "--limit", str(args.limit), "--outbox", str(outbox)], check=True)
 
     ready_dir = work_dir / "ready"
-    run([sys.executable, "-m", "affilipilot.cli", "ready-to-publish", "--db", args.db, "--batch-key", batch_key, "--outbox", str(outbox), "--out-dir", str(ready_dir)], check=False)
+    run([sys.executable, "-m", "affilipilot", "ready-to-publish", "--db", args.db, "--batch-key", batch_key, "--outbox", str(outbox), "--out-dir", str(ready_dir)], check=False)
     ready_report = load_json(ready_dir / "ready-to-publish.json")
     publishable = [v for v in ready_report.get("validations", []) if v.get("ok")]
     event_log.event("seed_auto_ready", batch_key=batch_key, publishable=len(publishable), validations=len(ready_report.get("validations", [])))
@@ -109,9 +109,9 @@ def main() -> int:
         else:
             for validation in publishable[: args.limit]:
                 post_id = validation["post_id"]
-                run([sys.executable, "-m", "affilipilot.cli", "decide", "--db", args.db, "--batch-key", batch_key, "--post-id", post_id, "--decision", "approved", "--reason", "seed_auto_test_window"], check=True)
+                run([sys.executable, "-m", "affilipilot", "decide", "--db", args.db, "--batch-key", batch_key, "--post-id", post_id, "--decision", "approved", "--reason", "seed_auto_test_window"], check=True)
                 mark_delivered(outbox, batch_key, post_id)
-            run([sys.executable, "-m", "affilipilot.cli", "ready-to-publish", "--db", args.db, "--batch-key", batch_key, "--outbox", str(outbox), "--out-dir", str(ready_dir)], check=False)
+            run([sys.executable, "-m", "affilipilot", "ready-to-publish", "--db", args.db, "--batch-key", batch_key, "--outbox", str(outbox), "--out-dir", str(ready_dir)], check=False)
             plan = ready_dir / "facebook-plan.json"
             result_dir = work_dir / "publish-results"
             result_dir.mkdir(exist_ok=True)
@@ -120,7 +120,7 @@ def main() -> int:
                     continue
                 post_id = validation["post_id"]
                 out = result_dir / f"publish-result-{post_id}.json"
-                proc = run([sys.executable, "-m", "affilipilot.cli", "publish-safe", "--db", args.db, "--plan", str(plan), "--post-id", post_id, "--outbox", str(outbox), "--batch-key", batch_key, "--out", str(out)], check=False)
+                proc = run([sys.executable, "-m", "affilipilot", "publish-safe", "--db", args.db, "--plan", str(plan), "--post-id", post_id, "--outbox", str(outbox), "--batch-key", batch_key, "--out", str(out)], check=False)
                 if proc.returncode == 0:
                     published += 1
                     event_log.event("seed_auto_publish_succeeded", batch_key=batch_key, post_id=post_id, result_path=str(out))

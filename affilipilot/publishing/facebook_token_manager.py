@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
@@ -11,6 +12,7 @@ from typing import Any
 
 from affilipilot.config import DEFAULT_SECRET_PATH, load_env_file
 from affilipilot.publishing.facebook_token import check_facebook_token
+from affilipilot.security import redact_for_audit
 
 GRAPH_URL = "https://graph.facebook.com/v19.0"
 

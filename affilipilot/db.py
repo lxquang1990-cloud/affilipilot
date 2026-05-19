@@ -41,6 +41,7 @@ class AffiliPilotDB:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._schema_applied = False
 
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path)
@@ -48,8 +49,13 @@ class AffiliPilotDB:
         return conn
 
     def init(self) -> None:
+        # `CREATE TABLE IF NOT EXISTS` is cheap but not free; in long E2E pipelines
+        # we call db methods dozens of times per run. Skip after first successful apply.
+        if self._schema_applied:
+            return
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+        self._schema_applied = True
 
     def save_batch(self, batch_key: str, source: str, manifest: dict[str, Any]) -> None:
         self.init()

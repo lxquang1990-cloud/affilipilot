@@ -2,10 +2,29 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 
-DEFAULT_SECRET_PATH = Path("/home/snail/.openclaw/workspace/secrets/affilipilot.env")
+def _resolve_default_secret_path() -> Path:
+    """Resolve secret file path with sensible fallbacks.
+
+    Priority:
+    1. ``AFFILIPILOT_SECRETS`` environment variable (explicit operator choice).
+    2. Legacy Pi location ``/home/snail/.openclaw/workspace/secrets/affilipilot.env``
+       if running on Snail's Pi (still the primary deployment target).
+    3. XDG-style ``~/.config/affilipilot/secrets.env`` on any other host.
+    """
+    override = os.environ.get("AFFILIPILOT_SECRETS")
+    if override:
+        return Path(override).expanduser()
+    legacy = Path("/home/snail/.openclaw/workspace/secrets/affilipilot.env")
+    if legacy.exists() or legacy.parent.exists():
+        return legacy
+    return Path.home() / ".config" / "affilipilot" / "secrets.env"
+
+
+DEFAULT_SECRET_PATH = _resolve_default_secret_path()
 
 
 @dataclass
@@ -27,18 +46,32 @@ class AffiliPilotConfig:
         return int(self.daily_budget_vnd * self.soft_budget_ratio)
 
 
-def load_env_file(path: str | Path = DEFAULT_SECRET_PATH) -> dict[str, str]:
-    path = Path(path)
+@lru_cache(maxsize=8)
+def _load_env_file_cached(path_str: str, mtime_ns: int) -> tuple[tuple[str, str], ...]:
+    """Internal cache keyed by (path, mtime). Returns tuple for hashability."""
+    path = Path(path_str)
     if not path.exists():
-        return {}
-    values: dict[str, str] = {}
+        return ()
+    values: list[tuple[str, str]] = []
     for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        values[key.strip()] = value.strip().strip('"').strip("'")
-    return values
+        values.append((key.strip(), value.strip().strip('"').strip("'")))
+    return tuple(values)
+
+
+def load_env_file(path: str | Path = DEFAULT_SECRET_PATH) -> dict[str, str]:
+    """Read a dotenv-style secret file. Cached by (path, mtime) for E2E hot paths."""
+    p = Path(path)
+    if not p.exists():
+        return {}
+    try:
+        mtime_ns = p.stat().st_mtime_ns
+    except OSError:
+        return {}
+    return dict(_load_env_file_cached(str(p), mtime_ns))
 
 
 def load_config(secret_path: str | Path = DEFAULT_SECRET_PATH) -> AffiliPilotConfig:

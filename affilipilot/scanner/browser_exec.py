@@ -39,4 +39,20 @@ def browser_render_discover(url: str, *, out_path: str | Path, source: str = "AU
 
     discovery: DiscoveryResult = discover_product_details_from_html(html, page_url=url, source=source, category=category, limit=limit)
     path = write_scan_result(discovery.to_scan_result(), out_path)
-    return BrowserExecutionResult(ok=bool(discovery.items), scan_path=str(path), total=len(discovery.items), notes=["discovery_only_no_publish"])
+    notes = ["discovery_only_no_publish"]
+    if not discovery.items:
+        # Contract: when ok=False, error must be populated so downstream workflows can log a reason.
+        # Empty HTML, anti-bot blocks, or unparseable layouts all hit this path.
+        return BrowserExecutionResult(
+            ok=False,
+            scan_path=str(path),
+            total=0,
+            error="no_products_discovered",
+            notes=notes,
+        )
+    return BrowserExecutionResult(
+        ok=True,
+        scan_path=str(path),
+        total=len(discovery.items),
+        notes=notes,
+    )

@@ -25,10 +25,17 @@ def test_tracking_response_status_and_audit():
     assert classify_tracking_response(errored) == "error"
 
 
-def test_create_tracking_link_dry_run_requires_config():
+def test_create_tracking_link_dry_run_synthesizes_isclix_fallback():
+    """Dry-run is meant for pipeline validation, not config gating.
+
+    The check_accesstrade_config() helper handles config gating separately.
+    Here we want a usable isclix URL even when config is empty so downstream
+    workflows (link gates, caption rendering, scoring) have realistic input.
+    """
     result = create_tracking_link(url="https://shopee.vn/a", utm={}, config=AccesstradeConfig(token="", campaign_id=""), dry_run=True)
-    assert not result.ok
-    assert "missing_ACCESSTRADE_TOKEN" in result.error
+    assert result.ok
+    assert "go.isclix.com" in result.affiliate_url
+    assert result.link_status == "dry_run"
 
 
 def test_create_tracking_link_blocks_status_code_03_without_fallback(monkeypatch):
@@ -49,9 +56,11 @@ def test_create_tracking_link_blocks_status_code_03_without_fallback(monkeypatch
 
 
 def test_create_tracking_link_dry_run_ok():
+    """With campaign_id set, dry-run produces an isclix deep-link."""
     result = create_tracking_link(url="https://shopee.vn/a", utm={}, config=AccesstradeConfig(token="tok", campaign_id="123"), dry_run=True)
     assert result.ok
-    assert result.affiliate_url == "https://shopee.vn/a"
+    assert "go.isclix.com" in result.affiliate_url
+    assert "deep_link/v5/123" in result.affiliate_url
 
 
 def test_multi_campaign_detection_and_override():

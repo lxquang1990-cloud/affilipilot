@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from typing import Any
 
 from affilipilot.config import DEFAULT_SECRET_PATH, load_env_file
 from affilipilot.links.shortlink import is_short_link
+from affilipilot.security import redact_for_audit
 
 
 @dataclass
@@ -81,7 +83,7 @@ def publish_post(*, post_text: str, link: str = "", config: FacebookConfig | Non
             return {
                 "ok": 200 <= resp.status < 300,
                 "status": resp.status,
-                "response": parsed,
+                "response": redact_for_audit(parsed),
                 "endpoint": f"/{config.page_id}/feed",
             }
     except urllib.error.HTTPError as exc:
@@ -93,7 +95,7 @@ def publish_post(*, post_text: str, link: str = "", config: FacebookConfig | Non
         return {
             "ok": False,
             "status": exc.code,
-            "response": parsed,
+            "response": redact_for_audit(parsed),
             "endpoint": f"/{config.page_id}/feed",
         }
 
@@ -133,14 +135,14 @@ def _multipart_post(endpoint: str, *, fields: dict[str, str], files: list[tuple[
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             parsed = json.loads(body) if body else {}
-            return {"ok": 200 <= resp.status < 300, "status": resp.status, "response": parsed}
+            return {"ok": 200 <= resp.status < 300, "status": resp.status, "response": redact_for_audit(parsed)}
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         try:
             parsed = json.loads(body) if body else {}
         except json.JSONDecodeError:
             parsed = {"raw": body[:500]}
-        return {"ok": False, "status": exc.code, "response": parsed}
+        return {"ok": False, "status": exc.code, "response": redact_for_audit(parsed)}
 
 
 def publish_photo_post(*, caption: str, image_path: str, link: str = "", config: FacebookConfig | None = None, timeout: int = 60) -> dict[str, Any]:

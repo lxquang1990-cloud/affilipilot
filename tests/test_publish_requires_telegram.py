@@ -88,7 +88,22 @@ def test_facebook_publish_allows_delivered_telegram_outbox(tmp_path, monkeypatch
     ])
 
     import affilipilot.cli as cli
-    monkeypatch.setattr(cli, "publish_post", lambda post_text, link: {"ok": True, "status": 200, "response": {"id": "fb_1"}, "endpoint": "/page/feed"})
+    from affilipilot import _cli_legacy
+    from affilipilot.cli import facebook as cli_facebook
+    from affilipilot.publishing import facebook as fb_module
+
+    # publish_post is imported in several places after the CLI refactor:
+    # 1. affilipilot.cli (re-exported for backward compat with this test)
+    # 2. affilipilot._cli_legacy (legacy monolithic CLI; bridged for now)
+    # 3. affilipilot.cli.facebook (the new domain module; where handler lives)
+    # 4. affilipilot.publishing.facebook (the canonical definition)
+    # Patch all so the call site resolves to the stub regardless of which
+    # binding the handler ends up using.
+    fake = lambda post_text, link: {"ok": True, "status": 200, "response": {"id": "fb_1"}, "endpoint": "/page/feed"}
+    monkeypatch.setattr(cli, "publish_post", fake)
+    monkeypatch.setattr(_cli_legacy, "publish_post", fake)
+    monkeypatch.setattr(cli_facebook, "publish_post", fake)
+    monkeypatch.setattr(fb_module, "publish_post", fake)
 
     code = main([
         "facebook-publish-one",

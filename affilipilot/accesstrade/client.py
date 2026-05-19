@@ -158,11 +158,35 @@ def create_tracking_link(*, url: str, utm: dict[str, str], config: AccesstradeCo
     selected = config.resolve_campaign(url=url, campaign_key=campaign_key)
     health = check_accesstrade_config(config, url=url, campaign_key=campaign_key)
     payload = build_tracking_payload(campaign_id=selected.campaign_id, urls=[url], utm=utm, channel_id=selected.channel_id)
-    if not health.configured:
-        return AccesstradeLinkResult(ok=False, original_url=url, payload=payload, error=",".join(health.reasons), dry_run=dry_run, campaign_key=selected.key)
+
+    # Dry-run produces an isclix fallback whenever possible so tests, smoke,
+    # and offline workflows can validate the downstream pipeline without a real
+    # Accesstrade token or campaign config. Real publishing still requires
+    # health.configured below.
     if dry_run:
-        fallback_url = build_isclix_deep_link(url=url, campaign_id=selected.campaign_id, channel_id=selected.channel_id, utm=utm) if selected.campaign_id and selected.channel_id else url
-        return AccesstradeLinkResult(ok=True, original_url=url, affiliate_url=fallback_url, payload=payload, dry_run=True, campaign_key=selected.key)
+        # Always synthesize a go.isclix.com URL in dry-run mode so downstream
+        # link gates (shortlink detection, caption rendering) have a realistic
+        # target to validate. Use "dryrun" sentinels when real ids are missing.
+        dry_campaign_id = selected.campaign_id or "dryrun"
+        dry_channel_id = selected.channel_id or "dryrun"
+        fallback_url = build_isclix_deep_link(
+            url=url,
+            campaign_id=dry_campaign_id,
+            channel_id=dry_channel_id,
+            utm=utm,
+        )
+        return AccesstradeLinkResult(
+            ok=True,
+            original_url=url,
+            affiliate_url=fallback_url,
+            payload=payload,
+            dry_run=True,
+            campaign_key=selected.key,
+            link_status="dry_run",
+        )
+
+    if not health.configured:
+        return AccesstradeLinkResult(ok=False, original_url=url, payload=payload, error=",".join(health.reasons), dry_run=False, campaign_key=selected.key)
 
     endpoint = f"{config.base_url.rstrip('/')}/v1/product_link/create"
     data = json.dumps(payload).encode("utf-8")
@@ -237,14 +261,9 @@ def extract_affiliate_url(response: dict[str, Any]) -> str:
 
 SECRET_KEY_RE = re.compile(r"(token|authorization|access_key|secret|password)", re.IGNORECASE)
 
-def redact_for_audit(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: ("[REDACTED]" if SECRET_KEY_RE.search(str(key)) else redact_for_audit(item)) for key, item in value.items()}
-    if isinstance(value, list):
-        return [redact_for_audit(item) for item in value]
-    if isinstance(value, str) and len(value) > 500:
-        return value[:500] + "...[truncated]"
-    return value
+# Centralized in affilipilot.security; re-export here for backward compatibility
+# with existing imports (accesstrade.deals, accesstrade.campaigns, ...).
+from affilipilot.security import redact_for_audit  # noqa: E402  (kept here to avoid circular import at top)
 
 def _list_field(response: dict[str, Any], key: str) -> list[Any]:
     data = response.get("data") if isinstance(response.get("data"), dict) else {}

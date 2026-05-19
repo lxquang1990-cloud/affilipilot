@@ -50,7 +50,7 @@ def run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess:
 
 
 def set_approval(batch_key: str, post_id: str) -> None:
-    run([sys.executable, "-m", "affilipilot.cli", "decide", "--db", str(DB), "--batch-key", batch_key, "--post-id", post_id, "--decision", "approved", "--reason", "auto_publish_test_window"])
+    run([sys.executable, "-m", "affilipilot", "decide", "--db", str(DB), "--batch-key", batch_key, "--post-id", post_id, "--decision", "approved", "--reason", "auto_publish_test_window"])
 
 
 def mark_delivered(outbox: Path, batch_key: str, post_id: str) -> None:
@@ -94,7 +94,7 @@ def main() -> int:
     result_dir.mkdir(parents=True, exist_ok=True)
 
     e2e_cmd = [
-        sys.executable, "-m", "affilipilot.cli", "profit-e2e",
+        sys.executable, "-m", "affilipilot", "profit-e2e",
         "--batch-key", batch_key,
         "--work-dir", str(work_dir),
         "--db", str(DB),
@@ -110,7 +110,7 @@ def main() -> int:
         print("e2e_no_publishable_batch")
         return 0
 
-    ready = run([sys.executable, "-m", "affilipilot.cli", "ready-to-publish", "--db", str(DB), "--batch-key", batch_key, "--outbox", str(outbox), "--out-dir", str(publish_dir)], check=False)
+    ready = run([sys.executable, "-m", "affilipilot", "ready-to-publish", "--db", str(DB), "--batch-key", batch_key, "--outbox", str(outbox), "--out-dir", str(publish_dir)], check=False)
     report_path = publish_dir / "ready-to-publish.json"
     if not report_path.exists():
         print("missing_ready_report")
@@ -124,7 +124,7 @@ def main() -> int:
         set_approval(batch_key, post_id)
         mark_delivered(outbox, batch_key, post_id)
     # Rebuild after synthetic approval/delivery audit entries.
-    run([sys.executable, "-m", "affilipilot.cli", "ready-to-publish", "--db", str(DB), "--batch-key", batch_key, "--outbox", str(outbox), "--out-dir", str(publish_dir)], check=False)
+    run([sys.executable, "-m", "affilipilot", "ready-to-publish", "--db", str(DB), "--batch-key", batch_key, "--outbox", str(outbox), "--out-dir", str(publish_dir)], check=False)
     report = json.loads(report_path.read_text(encoding="utf-8"))
     plan_path = publish_dir / "facebook-plan.json"
     for validation in report.get("validations", []):
@@ -135,7 +135,7 @@ def main() -> int:
             continue
         post_id = validation["post_id"]
         out = result_dir / f"publish-result-{post_id}.json"
-        proc = run([sys.executable, "-m", "affilipilot.cli", "publish-safe", "--db", str(DB), "--plan", str(plan_path), "--post-id", post_id, "--outbox", str(outbox), "--batch-key", batch_key, "--out", str(out)], check=False)
+        proc = run([sys.executable, "-m", "affilipilot", "publish-safe", "--db", str(DB), "--plan", str(plan_path), "--post-id", post_id, "--outbox", str(outbox), "--batch-key", batch_key, "--out", str(out)], check=False)
         if proc.returncode == 0:
             published += 1
             EVENTS.event("auto_publish_succeeded", batch_key=batch_key, post_id=post_id, result_path=str(out))

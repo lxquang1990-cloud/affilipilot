@@ -41,15 +41,33 @@ Not enabled by default:
 
 ## Quick start
 
+Install the package (editable install recommended during development):
+
 ```bash
-cd /home/snail/.openclaw/workspace/affilipilot
-scripts/verify_all.sh
+git clone https://github.com/lxquang1990-cloud/affilipilot.git
+cd affilipilot
+pip install -e .            # or: pip install -e ".[dev,browser]" for full tooling
 ```
+
+Verify the install:
+
+```bash
+affilipilot demo-happy-path
+```
+
+Or, without installing, run as a module:
+
+```bash
+PYTHONPATH=. python3 -m affilipilot demo-happy-path
+```
+
+On Snail's Pi the legacy `/home/snail/.openclaw/workspace/affilipilot` layout is
+still supported — both invocation styles work side by side.
 
 Run deterministic local smoke:
 
 ```bash
-python3 -m affilipilot demo-happy-path
+affilipilot demo-happy-path
 ```
 
 Run the standard profit-first E2E without publishing:
@@ -232,7 +250,7 @@ accesstrade-orders   Fetch/summarize Accesstrade orders
 - The auto scheduler checks circuit breaker state before doing work and logs structured events.
 - Raw affiliate/deep links are blocked from captions; official/trusted shortlinks are required.
 - If valid product video exists, video-first planning is preferred; image-only fallback is not silent.
-- Secrets should live outside chat/history, e.g. `/home/snail/.openclaw/workspace/secrets/affilipilot.env` with chmod `600`.
+- Secrets should live outside chat/history, e.g. `~/.config/affilipilot/secrets.env` with chmod `600` (or `/home/snail/.openclaw/workspace/secrets/affilipilot.env` on Snail's Pi). Override path via `AFFILIPILOT_SECRETS=/custom/path/.env`.
 
 ## Verification
 

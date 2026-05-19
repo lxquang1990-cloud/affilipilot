@@ -1,10 +1,70 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 from pathlib import Path
+from typing import Any
 
 from affilipilot.config import DEFAULT_SECRET_PATH
+
+# Regex used to identify sensitive keys in nested response payloads (Accesstrade,
+# Facebook Graph API, Telegram, 9Router). Match anywhere in the key name and
+# case-insensitive so partials like "page_access_token" or "Authorization" hit.
+SECRET_KEY_RE = re.compile(
+    r"(token|authorization|access_key|secret|password|api_key|bearer|cookie|set-cookie)",
+    re.IGNORECASE,
+)
+
+# Inline patterns that look like bearer tokens or long opaque secrets embedded in
+# free-form strings (error messages, raw HTML). Conservative: only redact obvious
+# matches to avoid mangling user-visible content.
+_INLINE_TOKEN_PATTERNS = (
+    re.compile(r"(access_token=)[^&\s\"']+", re.IGNORECASE),
+    re.compile(r"(Bearer\s+)[A-Za-z0-9_\-\.]{20,}", re.IGNORECASE),
+    re.compile(r"(EAA[A-Za-z0-9]{20,})"),  # Facebook Graph token prefix
+)
+
+
+def redact_for_audit(value: Any, *, max_string_length: int = 500) -> Any:
+    """Recursively redact secrets from API response payloads before logging.
+
+    Used by Accesstrade and (after this patch) Facebook publishing to ensure
+    raw provider responses never leak tokens into JSON files or event logs.
+    """
+    if isinstance(value, dict):
+        return {
+            key: ("[REDACTED]" if SECRET_KEY_RE.search(str(key)) else redact_for_audit(item, max_string_length=max_string_length))
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact_for_audit(item, max_string_length=max_string_length) for item in value]
+    if isinstance(value, tuple):
+        return tuple(redact_for_audit(item, max_string_length=max_string_length) for item in value)
+    if isinstance(value, str):
+        redacted = value
+        for pattern in _INLINE_TOKEN_PATTERNS:
+            redacted = pattern.sub(lambda m: m.group(1) + "[REDACTED]" if m.lastindex else "[REDACTED]", redacted)
+        if len(redacted) > max_string_length:
+            return redacted[:max_string_length] + "...[truncated]"
+        return redacted
+    return value
+
+
+def redact_response(result: dict[str, Any]) -> dict[str, Any]:
+    """Return a shallow copy of a publish/API result dict with response payload redacted.
+
+    Convenience wrapper for the common pattern: provider responses are stored
+    under the ``response`` key, and we want everything else (ok, status, endpoint)
+    to pass through verbatim.
+    """
+    if not isinstance(result, dict):
+        return result
+    redacted = dict(result)
+    if "response" in redacted:
+        redacted["response"] = redact_for_audit(redacted["response"])
+    return redacted
+
 
 ENV_TEMPLATE = """# AffiliPilot secrets — fill locally, never commit or paste into chat.
 # chmod 600 this file.
