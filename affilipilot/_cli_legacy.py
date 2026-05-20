@@ -22,6 +22,7 @@ from affilipilot.observability.event_log import EventLog, read_events, render_ev
 from affilipilot.scoring.confidence import compute_confidence
 from affilipilot.scoring.tier import classify_tier, load_tier_config, render_tier_result
 from affilipilot.analytics.conversions import render_conversion_summary, summarize_conversions, upsert_conversion
+from affilipilot.publishing.dispatch import dispatch_publish_strategy
 from affilipilot.publishing.facebook import check_facebook_config, publish_gallery_comment, publish_multi_photo_post, publish_photo_post, publish_post, publish_video_post
 from affilipilot.publishing.facebook_plan import plan_facebook_batch, render_facebook_plan
 from affilipilot.publishing.facebook_token import check_facebook_token, render_facebook_token_report
@@ -29,6 +30,7 @@ from affilipilot.publishing.facebook_token_manager import derive_page_token, exc
 from affilipilot.publishing.ready_package import build_ready_to_post_package
 from affilipilot.publishing.ready_to_publish import build_ready_to_publish_report, render_ready_to_publish_report
 from affilipilot.publishing.lifecycle import record_publish_event, render_publish_status
+from affilipilot.publishing.auto_publish_after_approval import publish_after_approval, render_publish_after_approval
 from affilipilot.publishing.safe_publish import render_publish_safe_validation, validate_publish_safe
 from affilipilot.readiness import build_readiness_report, render_readiness_report
 from affilipilot.security import write_secret_template
@@ -345,6 +347,21 @@ def cmd_decide(args: argparse.Namespace) -> int:
     print(f"Decision saved: {args.batch_key}/{args.post_id} -> {args.decision}")
     for row in approvals:
         print(f"{row['post_id']}: {row['status']}")
+    if args.decision == "approved" and args.publish_on_approve:
+        if not args.outbox:
+            raise SystemExit("--publish-on-approve requires --outbox for delivery proof")
+        receipt = args.receipt or f"cli-approval:{args.batch_key}:{args.post_id}"
+        mark_batch_delivered(args.outbox, batch_key=args.batch_key, post_id=args.post_id, receipt=receipt)
+        result = publish_after_approval(
+            db_path=args.db,
+            batch_key=args.batch_key,
+            post_id=args.post_id,
+            outbox_path=args.outbox,
+            out_dir=args.publish_dir,
+            publisher=dispatch_publish_strategy,
+        )
+        print(render_publish_after_approval(result))
+        return 0 if result.get("ok") else 2
     return 0
 
 
@@ -371,7 +388,7 @@ def cmd_record_publish_event(args: argparse.Namespace) -> int:
 
 def cmd_handle_text(args: argparse.Namespace) -> int:
     outbox_path = Path(args.outbox) if args.outbox else None
-    result = handle_text_message(args.text, AdapterConfig(db_path=Path(args.db), work_dir=Path(args.work_dir), limit=args.limit, outbox_path=outbox_path))
+    result = handle_text_message(args.text, AdapterConfig(db_path=Path(args.db), work_dir=Path(args.work_dir), limit=args.limit, outbox_path=outbox_path, publish_dir=Path(args.publish_dir), auto_publish_on_approve=args.publish_on_approve, approval_receipt=args.receipt))
     print(result.text)
     for attachment in result.attachments:
         print(f"ATTACHMENT:{attachment}")
@@ -1104,6 +1121,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--post-id", required=True)
     p.add_argument("--decision", required=True, choices=["pending", "approved", "rejected", "needs_edit", "blacklisted"])
     p.add_argument("--reason", default="")
+    p.add_argument("--publish-on-approve", action="store_true", help="After approval, run publish-safe and publish immediately if PASS")
+    p.add_argument("--outbox", default="", help="Outbox JSON with delivered approval card proof")
+    p.add_argument("--receipt", default="", help="Delivery/approval receipt; defaults to a local CLI approval receipt")
+    p.add_argument("--publish-dir", default="data/publish/approval-triggered", help="Directory for plan/result artifacts")
     p.set_defaults(func=cmd_decide)
 
     p = sub.add_parser("status", help="Show approval status for a batch")
@@ -1123,6 +1144,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--work-dir", default="data/telegram-mock", help="Work directory for inbound links and drafts")
     p.add_argument("--limit", type=int, default=5)
     p.add_argument("--outbox", default="", help="Optional local Telegram outbox JSON to queue generated approval messages")
+    p.add_argument("--publish-on-approve", action="store_true", help="For /aff_approve, run publish-safe and publish immediately if PASS")
+    p.add_argument("--receipt", default="", help="Delivery/approval receipt; defaults to a local approval receipt")
+    p.add_argument("--publish-dir", default="data/telegram-mock/publish", help="Directory for approval-triggered publish artifacts")
     p.set_defaults(func=cmd_handle_text)
 
     p = sub.add_parser("ready-package", help="Build ready-to-post fallback package for approved posts")

@@ -3,6 +3,7 @@
 ## 0.3.0 — Automation-first content/media pipeline (May 2026)
 
 ### Added
+- Approval-triggered publish path: one operator approval can now save approval, verify delivery proof, rebuild Facebook plan, run `publish-safe`, publish to the Page if PASS, and record lifecycle state.
 - Auto Source Hunter workflow for low-touch product input discovery, local quality filtering, link conversion, content drafting, media enrichment, approval-card queueing, and publish-safe preview.
 - Seed Auto workflow and seed hunter updates that avoid undocumented Accesstrade category filters.
 - PMO-style content Gate A/B/C and bounded regeneration before approval cards are queued.

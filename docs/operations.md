@@ -189,7 +189,28 @@ The verification suite compiles code, runs tests, scans for obvious secrets, and
 
 ## Real Facebook publish policy
 
-Only run `facebook-publish-one` when all are true:
+Default operator UX: **one approval publishes**. When an approval command is handled with `--publish-on-approve`, that approval is treated as the final publish intent. The system then automatically:
+
+1. saves the approval,
+2. marks the delivered approval card as proof,
+3. rebuilds the Facebook dry-run plan,
+4. runs `publish-safe`, and
+5. publishes to the Page only if `publish-safe` PASSes.
+
+Example one-step approval/publish from the adapter:
+
+```bash
+python3 -m affilipilot handle-text "/aff_approve post_20260516_001 ok" \
+  --db data/affilipilot.db \
+  --work-dir data/telegram-mock \
+  --outbox data/outbox/latest.json \
+  --publish-on-approve \
+  --receipt telegram:640968010:<message_id>
+```
+
+If any gate fails, the approval remains saved but publish is blocked and a failed publish lifecycle event is recorded.
+
+Manual publish is still available. Only run `facebook-publish-one` when all are true:
 
 1. `facebook-token-check` passes.
 2. `approve-ready` produced `publishable_dry_run` for the target post.
@@ -197,7 +218,7 @@ Only run `facebook-publish-one` when all are true:
 4. The target post has delivery proof and Snail explicitly approved the real publish.
 5. `publish-safe` reports PASS for the concrete post/plan.
 
-Example:
+Example manual publish:
 
 ```bash
 python3 -m affilipilot facebook-publish-one \

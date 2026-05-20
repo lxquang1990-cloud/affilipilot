@@ -19,13 +19,7 @@ import json
 from pathlib import Path
 
 from affilipilot.cli._registry import register
-from affilipilot.publishing.facebook import (
-    publish_gallery_comment,
-    publish_multi_photo_post,
-    publish_photo_post,
-    publish_post,
-    publish_video_post,
-)
+from affilipilot.publishing.facebook import publish_post  # backward-compatible test patch target
 from affilipilot.publishing.facebook_plan import plan_facebook_batch, render_facebook_plan
 from affilipilot.publishing.facebook_token import check_facebook_token, render_facebook_token_report
 from affilipilot.publishing.facebook_token_manager import (
@@ -35,6 +29,7 @@ from affilipilot.publishing.facebook_token_manager import (
     refresh_from_user_token,
     render_token_manager_result,
 )
+from affilipilot.publishing.dispatch import dispatch_publish_strategy
 from affilipilot.publishing.safe_publish import validate_publish_safe
 from affilipilot.security import redact_response
 
@@ -80,42 +75,6 @@ def _configure_facebook_publish_one(p: argparse.ArgumentParser) -> None:
     )
 
 
-def _dispatch_publish_strategy(item: dict, payload: dict) -> dict:
-    """Pick the right Facebook publisher based on the planned strategy.
-
-    Centralizes the strategy switch so cmd_facebook_publish_one stays readable
-    and so the same dispatch can be reused by ``publish-safe``.
-    """
-    strategy = payload.get("strategy", "")
-    if strategy in {"video_primary", "video_primary_with_image_comment"}:
-        result = publish_video_post(
-            description=payload.get("description", ""),
-            video_path=payload.get("local_video_path", ""),
-            link=payload.get("url", ""),
-        )
-        if result.get("ok") and strategy == "video_primary_with_image_comment" and payload.get("local_image_paths"):
-            target_id = result.get("response", {}).get("post_id") or result.get("response", {}).get("id", "")
-            comments = publish_gallery_comment(
-                object_id=target_id,
-                image_paths=payload.get("local_image_paths", []),
-                message="Ảnh thật sản phẩm",
-            )
-            result = {**result, "image_comments": comments, "ok": bool(result.get("ok")) and bool(comments.get("ok"))}
-        return result
-    if strategy == "multi_photo":
-        return publish_multi_photo_post(
-            message=payload.get("message", ""),
-            image_paths=payload.get("local_image_paths", []),
-            link=payload.get("url", ""),
-        )
-    if item.get("endpoint", "").endswith("/photos"):
-        return publish_photo_post(
-            caption=payload.get("caption", ""),
-            image_path=payload.get("local_image_path", ""),
-            link=payload.get("url", ""),
-        )
-    return publish_post(post_text=payload.get("message", ""), link=payload.get("link", ""))
-
 
 @register(
     "facebook-publish-one",
@@ -147,7 +106,7 @@ def cmd_facebook_publish_one(args: argparse.Namespace) -> int:
         raise SystemExit(f"Refusing publish; plan status is {item.get('status')}: {item.get('reasons')}")
 
     payload = item.get("payload_preview", {})
-    result = _dispatch_publish_strategy(item, payload)
+    result = dispatch_publish_strategy(item, payload)
 
     # Defense-in-depth: even though publish_post/photo/video already redact,
     # apply one more pass before writing to disk in case a strategy returns

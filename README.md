@@ -51,7 +51,7 @@ This version focuses on making AffiliPilot more operator-light and publish-safe:
 - Content generation now uses product archetypes plus bounded regeneration before approval. Generic template phrases are blocked; caption hints are product-specific.
 - Affiliate disclosure is intentionally retained for transparency/compliance, but shortened to a less intrusive sentence.
 - PDP media enrichment preserves galleries/video URLs before Facebook planning, so valid posts can use `multi_photo` or video-first strategies instead of silently falling back to one image.
-- Publish remains guarded by delivery proof, explicit approval, `publish-safe` PASS, and explicit real publish command.
+- Publish remains guarded by delivery proof, explicit approval, and `publish-safe` PASS. In normal Telegram UX, one approval can trigger immediate publish; if any gate fails, publish is blocked and reported.
 
 ## Quick start
 

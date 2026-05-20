@@ -6,7 +6,9 @@ from pathlib import Path
 
 from affilipilot.db import AffiliPilotDB
 from affilipilot.telegram.commands import TelegramIntent, help_text, parse_telegram_text
-from affilipilot.telegram.delivery import queue_approval_batch
+from affilipilot.publishing.auto_publish_after_approval import publish_after_approval, render_publish_after_approval
+from affilipilot.publishing.dispatch import dispatch_publish_strategy
+from affilipilot.telegram.delivery import mark_batch_delivered, queue_approval_batch
 from affilipilot.workflows.approval import create_approval_batch, decide_post, render_status
 from affilipilot.workflows.campaign_status import build_campaign_status, render_campaign_status
 from affilipilot.workflows.doctor import build_doctor_report, render_doctor_report
@@ -20,6 +22,8 @@ class AdapterConfig:
     limit: int = 5
     outbox_path: Path | None = None
     publish_dir: Path | None = None
+    auto_publish_on_approve: bool = False
+    approval_receipt: str = ""
 
 
 @dataclass
@@ -124,7 +128,26 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
         }
         post_id = command.args["post_id"]
         reason = command.args.get("reason", "")
-        decide_post(config.db_path, batch_key=batch_key, post_id=post_id, decision=decision_map[command.intent], reason=reason)
-        return AdapterResult(command.intent, render_status(config.db_path, batch_key=batch_key), [])
+        decision = decision_map[command.intent]
+        decide_post(config.db_path, batch_key=batch_key, post_id=post_id, decision=decision, reason=reason)
+        status_text = render_status(config.db_path, batch_key=batch_key)
+        if command.intent == TelegramIntent.APPROVE and config.auto_publish_on_approve:
+            if not config.outbox_path:
+                return AdapterResult(command.intent, status_text + "\n\n⚠️ Auto-publish skipped: missing outbox path for delivery proof.", [])
+            receipt = config.approval_receipt or f"local-approval:{batch_key}:{post_id}"
+            try:
+                mark_batch_delivered(config.outbox_path, batch_key=batch_key, post_id=post_id, receipt=receipt)
+                publish_result = publish_after_approval(
+                    db_path=config.db_path,
+                    batch_key=batch_key,
+                    post_id=post_id,
+                    outbox_path=config.outbox_path,
+                    out_dir=config.publish_dir or (config.work_dir / "publish" / batch_key),
+                    publisher=dispatch_publish_strategy,
+                )
+                status_text += "\n\n" + render_publish_after_approval(publish_result)
+            except Exception as exc:  # keep adapter responsive; surface blocker to operator
+                status_text += f"\n\n⚠️ Auto-publish failed after approval: {exc}"
+        return AdapterResult(command.intent, status_text, [])
 
     return AdapterResult(command.intent, help_text(), [])
