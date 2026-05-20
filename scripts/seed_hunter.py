@@ -168,12 +168,14 @@ def hunt(config_path: Path, *, out_dir: Path, per_keyword_limit: int, final_limi
         if source in ("accesstrade", "all"):
             for domain in item.get("domains", ["shopee.vn", "lazada.vn"]):
                 try:
-                    result = fetch_datafeeds(domain=domain, cat=keyword, limit=per_keyword_limit, timeout=30)
+                    # Accesstrade /v1/datafeeds does not document keyword/category filtering.
+                    # Fetch broad discounted products only, then apply local keyword/taste gates.
+                    result = fetch_datafeeds(domain=domain, status_discount="1", limit=per_keyword_limit, timeout=30)
                 except Exception as exc:  # noqa: BLE001
-                    source_reports.append({"keyword": keyword, "domain": domain, "source": "accesstrade_datafeed", "ok": False, "error": type(exc).__name__, "products": 0})
+                    source_reports.append({"keyword": keyword, "domain": domain, "source": "accesstrade_datafeed_broad", "ok": False, "error": type(exc).__name__, "products": 0, "note": "no_keyword_filter_supported"})
                     continue
                 products = result.get("products") or []
-                source_reports.append({"keyword": keyword, "domain": domain, "source": "accesstrade_datafeed", "ok": result.get("ok"), "error": result.get("error", ""), "products": len(products)})
+                source_reports.append({"keyword": keyword, "domain": domain, "source": "accesstrade_datafeed_broad", "ok": result.get("ok"), "error": result.get("error", ""), "products": len(products), "note": "keyword_filter_not_supported_by_accesstrade_local_match_only"})
                 for product in products:
                     cand = _as_candidate(product, keyword=keyword, category=category)
                     ok, score, reasons = _accept_candidate(cand, keyword)

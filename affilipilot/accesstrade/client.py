@@ -102,6 +102,11 @@ def load_campaigns_from_values(values: dict[str, str]) -> dict[str, AccesstradeC
     if legacy_shopee and "SHOPEE" not in campaigns:
         campaigns["SHOPEE"] = AccesstradeCampaign(key="SHOPEE", campaign_id=legacy_shopee, domains=("shopee.vn", "shopee.com"))
 
+    # Current approved Tiki campaign fallback. This is non-secret publisher
+    # metadata; the Accesstrade token remains in secrets/env only.
+    if "TIKI" not in campaigns:
+        campaigns["TIKI"] = AccesstradeCampaign(key="TIKI", campaign_id="4348614231480407268", domains=("tiki.vn",))
+
     return campaigns
 
 def detect_campaign_key(url: str, campaigns: dict[str, AccesstradeCampaign] | None = None) -> str:

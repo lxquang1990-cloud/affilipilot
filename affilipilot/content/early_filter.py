@@ -19,7 +19,7 @@ BLOCKED_CATEGORY_TOKENS = {
 BLOCKED_TEXT_PATTERNS = {
     "medicine_claim": ("thuốc", "dược", "điều trị", "trị ", "chữa", "kháng sinh"),
     "supplement_claim": ("vitamin", "k2d3", "omega", "dha", "canxi", "collagen", "tăng đề kháng", "sức đề kháng", "bổ sung"),
-    "medical_device": ("đường huyết", "tiểu đường", "huyết áp", "nhiệt kế", "máy đo", "test nhanh", "hồng ngoại", "dầu cù là", "giảm đau"),
+    "medical_device": ("đường huyết", "tiểu đường", "huyết áp", "nhiệt kế", "máy đo", "test nhanh", "hồng ngoại", "dầu cù là", "giảm đau", "khám răng", "nha sĩ", "nha khoa", "bác sĩ", "bac sĩ"),
     "weight_loss_claim": ("giảm cân", "đốt mỡ", "tan mỡ", "eo thon"),
     "adult_or_gambling": ("sinh lý", "bao cao su", "quần lót", "đồ lót", "nội y", "casino", "cá cược", "betting"),
     "child_growth_claim": ("tăng chiều cao", "phát triển trí não", "thông minh hơn", "ăn ngon", "ngủ ngon"),
@@ -62,6 +62,12 @@ def normalize_category(product: ProductCandidate) -> str:
         return "phone"
     if any(token in category for token in ("appliance", "gia_dung", "gia-dung")):
         return "home_appliance"
+    if any(term in raw for term in ("máy hút bụi", "hút bụi", "máy xay", "nồi chiên", "máy ép", "bếp điện", "bếp từ", "máy lọc", "quạt điện", "quạt tích điện")):
+        return "home_appliance"
+    if any(term in raw for term in ("làm bánh", "bánh cuốn", "hộp cơm", "bình giữ nhiệt", "nắp nồi", "bảo quản thực phẩm", "khăn lau bếp", "nhà bếp", "khuôn làm bánh")):
+        return "home_living"
+    if any(term in raw for term in ("hộp đựng", "kệ để", "giá treo", "tủ đựng", "lưu trữ", "sắp xếp", "gầm giường")):
+        return "storage"
     if any(token in category for token in ("home", "house", "nha_cua", "đời_sống", "doi_song")):
         return "home_living"
     if any(token in category for token in ("baby", "mother", "me_be", "mẹ_bé", "me-va-be")):
@@ -70,10 +76,12 @@ def normalize_category(product: ProductCandidate) -> str:
         return "medical"
     if "nhiệt kế" in raw or "duong huyet" in raw or "đường huyết" in raw:
         return "medical"
+    if any(term in raw for term in ("xe đạp", "xe dap", "ghi đông", "ghi dong", "sừng trâu", "sung trau", "shimano", "xích sên", "củ đề", "sang đề")):
+        return "bike_accessory"
     if any(term in raw for term in ("điều khiển tivi", "remote", "smart tv", "tivi", "lcd", "led")):
         return "electronics"
-    if any(term in raw for term in ("xe đạp", "shimano", "xích sên", "củ đề", "sang đề")):
-        return "bike_accessory"
+    if any(term in raw for term in ("sách ", "sach ", "book", "tiếng anh", "ngoại ngữ", "tiểu thuyết", "truyện tranh")):
+        return "book"
     if any(term in raw for term in ("đồ chơi", "toy", "mc queen", "tàu thomas")):
         return "toy"
     return category if category in SAFE_CATEGORY_ALLOWLIST else category

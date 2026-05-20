@@ -24,9 +24,13 @@ def _score_image_url(url: str, title: str = "") -> int:
     score = 0
     if any(h in low for h in BAD_IMAGE_HINTS):
         score -= 50
+    if any(h in low for h in ("/cache/750x750/", "/750x750/", "_720x720", "_800x800")):
+        score += 80
+    if any(h in low for h in ("/cache/100x100/", "/100x100/", "/cache/200x280/", "/200x280/", "/cache/280x280/", "/280x280/")):
+        score -= 80
     if "media/catalog/product" in low or "/product/" in low:
         score += 40
-    if "lazcdn.com" in low or "cellphones.com.vn" in low:
+    if "lazcdn.com" in low or "tikicdn.com" in low or "cellphones.com.vn" in low:
         score += 15
     if any(ext in low for ext in (".jpg", ".jpeg", ".png", ".webp")):
         score += 5
@@ -203,12 +207,13 @@ def enrich_product_from_url(url: str, *, title: str = "", category: str = "unkno
             product["notes"] = (product.get("notes", "") + ";lazada_product_media").strip(";")
         if media.get("video_urls"):
             product["video_urls"] = media["video_urls"]
-    if not product.get("image_url"):
-        images = harvest_image_urls(html, title=title or product.get("title", ""), limit=5)
-        if images:
-            product["image_url"] = images[0]
-            product.setdefault("raw", {})["image_candidates"] = images
-            product["notes"] = (product.get("notes", "") + ";image_harvest").strip(";")
+    images = harvest_image_urls(html, title=title or product.get("title", ""), limit=8)
+    if images and not product.get("image_urls"):
+        product["image_urls"] = images
+    if not product.get("image_url") and images:
+        product["image_url"] = images[0]
+        product.setdefault("raw", {})["image_candidates"] = images
+        product["notes"] = (product.get("notes", "") + ";image_harvest").strip(";")
     product["product_urls"] = harvest_lazada_product_urls(html, limit=10)
     return product
 

@@ -13,6 +13,26 @@ def test_harvest_image_urls_prefers_product_images():
     images = harvest_image_urls(html, title="abc product")
     assert images[0].endswith("abc-product.jpg")
 
+def test_enrich_product_from_url_keeps_harvested_gallery(monkeypatch):
+    from affilipilot.scanner import enrich
+
+    html = '''
+    <html><head><title>Máy xay</title></head>
+    <script>{"image":"https://salt.tikicdn.com/cache/750x750/media/catalog/producttmp/a/main.jpg"}</script>
+    <script>{"image":"https://salt.tikicdn.com/cache/750x750/media/catalog/producttmp/a/detail.jpg"}</script>
+    </html>
+    '''
+    monkeypatch.setattr(enrich, "fetch_html", lambda url, timeout=30: html)
+    monkeypatch.setattr(enrich, "parse_products_from_html", lambda *args, **kwargs: [])
+
+    product = enrich.enrich_product_from_url("https://tiki.vn/p.html", title="Máy xay", category="home_appliance")
+
+    assert product["image_url"] == "https://salt.tikicdn.com/cache/750x750/media/catalog/producttmp/a/main.jpg"
+    assert product["image_urls"] == [
+        "https://salt.tikicdn.com/cache/750x750/media/catalog/producttmp/a/main.jpg",
+        "https://salt.tikicdn.com/cache/750x750/media/catalog/producttmp/a/detail.jpg",
+    ]
+
 
 def test_extract_lazada_product_media_from_seo_gallery_and_sku_galleries():
     html = '''

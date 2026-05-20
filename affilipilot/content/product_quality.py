@@ -14,8 +14,10 @@ GENERIC_BAD_PHRASES = (
 INTERNAL_HASHTAGS = ("#tiepthilienket", "#cellphonesaffiliate", "#lazadaaffiliate", "#shopeeaffiliate")
 TECH_TERMS = ("cấu hình", "ram", "chip", "camera", "pin", "bảo hành")
 BABY_CARE_TERMS = ("mềm", "cotton", "muslin", "sợi tre", "thấm", "bụi vải", "giặt", "da bé", "lau", "sơ sinh")
-HOME_APPLIANCE_TERMS = ("công suất", "kích thước", "bảo hành", "đổi trả", "review", "đánh giá", "sinh hoạt", "trong nhà")
+HOME_APPLIANCE_TERMS = ("công suất", "kích thước", "bảo hành", "đổi trả", "review", "đánh giá", "sinh hoạt", "trong nhà", "dung tích", "độ ồn")
 ELECTRONICS_TERMS = ("pin", "bộ nhớ", "cấu hình", "bảo hành", "camera", "dung lượng", "làm việc", "học tập")
+FEEDING_TERMS = ("ăn dặm", "vệ sinh", "chất liệu", "dung tích", "dễ rửa", "tháo rời", "an toàn thực phẩm", "bé cầm")
+STORAGE_TERMS = ("gọn", "sắp xếp", "kích thước", "tải trọng", "chất liệu", "lắp", "treo", "đồ nhỏ", "review")
 RISKY_CLAIM_TERMS = ("điều trị", "chữa", "trị dứt điểm", "tăng đề kháng", "giảm cân", "đường huyết", "tiểu đường", "tăng chiều cao")
 
 @dataclass
@@ -52,7 +54,7 @@ def evaluate_product_content(product: dict[str, Any], text: str) -> ProductConte
         recommendations.append("Use audience/search hashtags; keep affiliate disclosure in prose.")
         score -= 25
 
-    if category == "baby_care" or any(term in title for term in ("khăn", "khan", "sữa", "sua")):
+    if category == "baby_care" or any(term in title for term in ("khăn", "khan", "khăn sữa", "khan sua")):
         if not any(term in combined for term in BABY_CARE_TERMS):
             reasons.append("missing_product_specific_baby_care_benefit")
             recommendations.append("Mention softness, material, absorbency, washing, low lint, or baby-skin fit.")
@@ -73,10 +75,22 @@ def evaluate_product_content(product: dict[str, Any], text: str) -> ProductConte
             recommendations.append("Mention camera, battery, storage, configuration, warranty, work/study, or practical usage rationale.")
             score -= 35
 
-    if category in {"home_appliance", "home_living", "storage"}:
+    if category in {"home_appliance", "home_living"}:
         if not any(term in lower for term in HOME_APPLIANCE_TERMS):
             reasons.append("missing_home_appliance_purchase_rationale")
             recommendations.append("Mention size, power/capacity, warranty, home use case, review photos, or return policy.")
+            score -= 30
+
+    if category == "feeding":
+        if not any(term in lower for term in FEEDING_TERMS):
+            reasons.append("missing_feeding_purchase_rationale")
+            recommendations.append("Mention material, cleaning, capacity/size, baby handling, or real-use review context.")
+            score -= 30
+
+    if category == "storage":
+        if not any(term in lower for term in STORAGE_TERMS):
+            reasons.append("missing_storage_purchase_rationale")
+            recommendations.append("Mention real storage use case, size, load, material, installation, or review photos.")
             score -= 30
 
     if any(term in combined for term in RISKY_CLAIM_TERMS):

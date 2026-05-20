@@ -41,6 +41,22 @@ def test_fetch_source_writes_cross_run_cache_on_success(tmp_path, monkeypatch):
     assert report["ok"] is True
     assert (cache_dir / "good.json").exists()
 
+def test_fetch_source_records_target_category_as_internal_note_and_caches(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "global-cache"
+    seen = {}
+
+    def fake_fetch(**kwargs):
+        seen.update(kwargs)
+        return {"ok": True, "products": [{"url": "https://lazada.vn/products/a", "title": "Nhiệt kế", "category": "health_and_beauty"}]}
+
+    monkeypatch.setattr(e2e_profit, "fetch_datafeeds", fake_fetch)
+    report = e2e_profit._fetch_source({"kind": "datafeed", "name": "broad", "target_category": "home_appliance"}, tmp_path, cache_dir=cache_dir)
+    assert report["ok"] is True
+    assert report["target_category"] == "home_appliance"
+    assert report["source_filter_note"].startswith("category_filter_not_supported_by_accesstrade")
+    assert "cat" not in seen
+    assert (cache_dir / "broad.json").exists()
+
 
 def test_fetch_source_ignores_placeholder_cache_on_upstream_error(tmp_path, monkeypatch):
     cache_dir = tmp_path / "global-cache"

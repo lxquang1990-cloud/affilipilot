@@ -1,58 +1,39 @@
 # HEARTBEAT — AffiliPilot Lite
 
 ## Status
-Local MVP complete: approval-gated draft → outbox → approve → ready package → Facebook dry-run plan pipeline deployed.
+Production-hardened automation-first MVP. The pipeline can discover/ingest candidate products, filter and score them, convert affiliate links, generate gated Vietnamese captions, enrich media, queue only vetted approval cards, build publish-safe previews, and publish to Facebook only through explicit guarded commands.
+
+Latest verification: `PYTHONPATH=. pytest` → 217 passed.
 
 ## Objective
-Build a safe, money-first affiliate assistant for Accesstrade/Shopee content on the Facebook Page `Nâng Niu Trái Ngọt Tình Yêu`.
+Build a safe, money-first affiliate assistant for Accesstrade/Shopee/Tiki-style content on the Facebook Page `Nâng Niu Trái Ngọt Tình Yêu`, with low operator friction and strong publish guardrails.
 
 ## Current scope
-- [x] Blueprint and build proposal
-- [x] Mother/baby compliance policy
-- [x] Tracking/sub_id strategy
-- [x] Input format for product links
-- [x] Product scoring skeleton
-- [x] Compliance checker skeleton
-- [x] Telegram approval model skeleton
-- [x] Batch preview CLI (`python -m affilipilot batch-preview`)
-- [x] Ready-to-post preview package output
-- [x] SQLite approval state repository
-- [x] CLI create-batch/status/decide
-- [x] Telegram command parser/mock adapter
-- [x] CLI handle-text for Telegram-like local simulation
-- [x] Publish gate + ready-to-post fallback
-- [x] Facebook dry-run/config stub; real publish disabled
-- [x] Facebook dry-run publish planner
-- [x] Affiliate Link Gate
-- [x] Media Gate
-- [x] Media fetch/validation pipeline
-- [x] Facebook photo dry-run planner
-- [x] Manual affiliate-ready input validator/workflow
-- [x] Accesstrade link creator dry-run/real API wrapper
-- [x] Converted input writer
-- [x] Guarded Facebook photo publish function wired to one-post publish command
-- [x] Accesstrade config/payload skeleton; real API disabled
-- [x] Config/env status loader
-- [x] Secret env template/helper
-- [x] Integration readiness report
-- [x] Budget tracker skeleton
-- [x] Daily digest generator
-- [x] Markdown day report generator
-- [x] Run-day local end-to-end simulation command
-- [x] Telegram local outbox delivery bridge
-- [x] Compliance-aware approval card buttons
-- [x] Quickstart documentation
-- [x] Realistic mother/baby sample batch
-- [x] Blacklist state skeleton
-- [x] Verification script/tests
-- [x] One-shot draft workflow (`draft-links`)
-- [x] Approval → ready package → Facebook dry-run command (`approve-ready`)
-- [x] Full batch status command (`batch-status`)
-- [x] Happy-path smoke command/script (`demo-happy-path`, `scripts/smoke_affilipilot.sh`)
-- [x] Operator documentation (`docs/operations.md`)
+- [x] Blueprint, compliance policy, and tracking/sub_id strategy
+- [x] Manual product input, scoring, Vietnamese caption generation, and Telegram-style approval model
+- [x] Accesstrade conversion/shortlink flow and docs-correct broad datafeed handling
+- [x] Tiki campaign fallback mapping for conversion
+- [x] Profit-first E2E workflow and Auto Source Hunter workflow
+- [x] Seed Hunter / Seed Auto fallback path
+- [x] Product risk, taste, market-fit, and content quality gates
+- [x] PMO-style content Gate A/B/C plus bounded regeneration
+- [x] Product archetype generator with shortened affiliate disclosure
+- [x] PDP media enrichment for galleries/video URLs and local media validation
+- [x] Facebook publish planner with single-photo, multi-photo, and video-first strategies
+- [x] SQLite approval state, delivery-proof gates, ready package builder, and publish-safe validator
+- [x] Guarded real Facebook publish command
+- [x] Event log, circuit breaker, kill switch, and time-boxed test auto-publish controls
+- [x] Tests/regressions for content, source, media, publish safety, and Accesstrade behavior
 
-## Not yet enabled
-- Accesstrade token/API calls
-- Facebook auto-publish
-- TikTok/YouTube/video
-- Auto-approve
+## Not enabled by default
+- Arbitrary Facebook auto-publish outside explicit guarded test windows
+- Publish without delivery proof, approval, and publish-safe PASS
+- Anti-bot bypass for Shopee/Lazada
+- Direct Telegram Bot API sending outside the OpenClaw bridge
+- TikTok/YouTube/Reels publishing
+
+## Next
+- [ ] Improve PDP media enrichment pass rate while keeping wrong-media blocks strict
+- [ ] Auto-record publish lifecycle event after successful `facebook-publish-one`
+- [ ] Add optional browser discovery when the runtime is available
+- [ ] Strengthen ROI feedback loop for source/product selection

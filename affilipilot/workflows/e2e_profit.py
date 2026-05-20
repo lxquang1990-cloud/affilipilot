@@ -22,18 +22,18 @@ from affilipilot.telegram.delivery import queue_approval_batch
 from affilipilot.workflows.accesstrade_links import convert_input_links, write_converted_input
 from affilipilot.workflows.approval import create_approval_batch
 
-# Accesstrade help/news notes used here:
-# - Datafeed supports `cat=<category-code>` for category-specific discovery.
+# Accesstrade docs notes used here:
+# - Datafeed does not document category filtering; `target_category` is internal only.
 # - Some datafeeds include promotion details per product; prefer status_discount feeds.
 # - API rate limit is 30 requests/minute, so keep default source count small.
 DEFAULT_SOURCE_CACHE_DIR = Path("data/cache/accesstrade/sources")
 
 DEFAULT_PROFIT_SOURCES = [
-    {"kind": "datafeed", "name": "lazada_home_appliance", "domain": "lazada.vn", "cat": "thiet-bi-gia-dung", "status_discount": "1", "limit": 30, "campaign_key": "LAZADA"},
-    {"kind": "datafeed", "name": "lazada_electronics", "domain": "lazada.vn", "cat": "dien-thoai-may-tinh-bang", "status_discount": "1", "limit": 30, "campaign_key": "LAZADA"},
-    {"kind": "datafeed", "name": "lazada_computing", "domain": "lazada.vn", "cat": "may-tinh-lap-top-phu-kien", "status_discount": "1", "limit": 30, "campaign_key": "LAZADA"},
-    {"kind": "datafeed", "name": "lazada_home_midprice", "domain": "lazada.vn", "cat": "nha-cua-doi-song", "price_from": "80000", "price_to": "1500000", "limit": 30, "campaign_key": "LAZADA"},
-    {"kind": "datafeed", "name": "lazada_appliance_midprice", "domain": "lazada.vn", "cat": "thiet-bi-gia-dung", "price_from": "80000", "price_to": "2000000", "limit": 30, "campaign_key": "LAZADA"},
+    {"kind": "datafeed", "name": "lazada_home_appliance", "domain": "lazada.vn", "target_category": "home_appliance", "status_discount": "1", "limit": 30, "campaign_key": "LAZADA"},
+    {"kind": "datafeed", "name": "lazada_electronics", "domain": "lazada.vn", "target_category": "electronics", "status_discount": "1", "limit": 30, "campaign_key": "LAZADA"},
+    {"kind": "datafeed", "name": "lazada_computing", "domain": "lazada.vn", "target_category": "computing", "status_discount": "1", "limit": 30, "campaign_key": "LAZADA"},
+    {"kind": "datafeed", "name": "lazada_home_midprice", "domain": "lazada.vn", "target_category": "home_living", "price_from": "80000", "price_to": "1500000", "limit": 30, "campaign_key": "LAZADA"},
+    {"kind": "datafeed", "name": "lazada_appliance_midprice", "domain": "lazada.vn", "target_category": "home_appliance", "price_from": "80000", "price_to": "2000000", "limit": 30, "campaign_key": "LAZADA"},
     {"kind": "datafeed", "name": "shopee_mid_price", "domain": "shopee.vn", "price_from": "100000", "price_to": "1500000", "limit": 30, "campaign_key": "SHOPEE"},
     {"kind": "datafeed", "name": "shopee_general", "domain": "shopee.vn", "limit": 30, "campaign_key": "SHOPEE"},
     {"kind": "top_products", "name": "lazada_top", "merchant": "lazada", "limit": 50, "campaign_key": "LAZADA"},
@@ -146,6 +146,11 @@ def _load_cached_source(out: Path) -> dict[str, Any] | None:
     return None
 
 
+def _source_filter_note(source: dict[str, Any]) -> str:
+    if source.get("target_category"):
+        return "category_filter_not_supported_by_accesstrade:datafeed_broad_fetch_internal_target_category_only"
+    return ""
+
 def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Path = DEFAULT_SOURCE_CACHE_DIR) -> dict[str, Any]:
     name = source.get("name") or source.get("kind", "source")
     out = out_dir / f"{name}.json"
@@ -160,7 +165,6 @@ def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Pat
             data = fetch_datafeeds(
                 campaign=source.get("campaign", ""),
                 domain=source.get("domain", ""),
-                cat=source.get("cat", ""),
                 status_discount=source.get("status_discount", ""),
                 discount_rate_from=source.get("discount_rate_from", ""),
                 price_from=source.get("price_from", ""),
@@ -177,6 +181,10 @@ def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Pat
         data = cached or {"ok": False, "error": f"source_fetch_error:{type(exc).__name__}", "products": [], "source": source.get("kind", "datafeed")}
         if cached:
             data["fallback_error"] = f"source_fetch_error:{type(exc).__name__}"
+    filter_note = _source_filter_note(source)
+    if filter_note:
+        data["source_filter_note"] = filter_note
+        data["target_category"] = source.get("target_category", "")
     out.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if data.get("ok") and data.get("products") and data.get("source_mode") != "cached_fallback":
         clean_products = [p for p in data.get("products", []) if isinstance(p, dict) and not _is_placeholder_product(p)]
@@ -379,8 +387,11 @@ def _source_line(source: dict[str, Any]) -> str:
     mode = source.get("source_mode", "live")
     error = source.get("error") or source.get("fallback_error") or ""
     campaign = source.get("campaign_id") or "-"
+    target = source.get("target_category") or "-"
+    note = source.get("source_filter_note") or ""
     suffix = f" error={error}" if error else ""
-    return f"- {source.get('name')}: {status} products={products} mode={mode} campaign={campaign}{suffix}"
+    note_suffix = f" note={note}" if note else ""
+    return f"- {source.get('name')}: {status} products={products} mode={mode} campaign={campaign} target={target}{suffix}{note_suffix}"
 
 
 def _gate_failure_summary(gates: list[dict[str, Any]]) -> list[dict[str, Any]]:

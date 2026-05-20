@@ -1,12 +1,84 @@
 {
   "sources": [
-    {"kind": "datafeed", "name": "lazada_home_appliance_broad", "domain": "lazada.vn", "cat": "thiet-bi-gia-dung", "price_from": "80000", "price_to": "2500000", "limit": 80, "campaign_key": "LAZADA"},
-    {"kind": "datafeed", "name": "lazada_home_living_broad", "domain": "lazada.vn", "cat": "nha-cua-doi-song", "price_from": "50000", "price_to": "1500000", "limit": 80, "campaign_key": "LAZADA"},
-    {"kind": "datafeed", "name": "lazada_kitchen_broad", "domain": "lazada.vn", "cat": "bep-va-phong-an", "price_from": "50000", "price_to": "1500000", "limit": 80, "campaign_key": "LAZADA"},
-    {"kind": "datafeed", "name": "lazada_storage_broad", "domain": "lazada.vn", "cat": "sap-xep-nha-cua", "price_from": "50000", "price_to": "1000000", "limit": 80, "campaign_key": "LAZADA"},
-    {"kind": "datafeed", "name": "lazada_office_broad", "domain": "lazada.vn", "cat": "van-phong-pham", "price_from": "50000", "price_to": "1200000", "limit": 80, "campaign_key": "LAZADA"},
-    {"kind": "datafeed", "name": "shopee_home_broad", "domain": "shopee.vn", "cat": "nha-cua-doi-song", "price_from": "50000", "price_to": "1500000", "limit": 80, "campaign_key": "SHOPEE"},
-    {"kind": "datafeed", "name": "shopee_appliance_broad", "domain": "shopee.vn", "cat": "thiet-bi-gia-dung", "price_from": "80000", "price_to": "2500000", "limit": 80, "campaign_key": "SHOPEE"},
-    {"kind": "datafeed", "name": "shopee_office_broad", "domain": "shopee.vn", "cat": "van-phong-pham", "price_from": "50000", "price_to": "1200000", "limit": 80, "campaign_key": "SHOPEE"}
+    {
+      "kind": "datafeed",
+      "name": "lazada_home_appliance_broad",
+      "domain": "lazada.vn",
+      "price_from": "80000",
+      "price_to": "2500000",
+      "limit": 80,
+      "campaign_key": "LAZADA",
+      "target_category": "home_appliance"
+    },
+    {
+      "kind": "datafeed",
+      "name": "lazada_home_living_broad",
+      "domain": "lazada.vn",
+      "price_from": "50000",
+      "price_to": "1500000",
+      "limit": 80,
+      "campaign_key": "LAZADA",
+      "target_category": "home_living"
+    },
+    {
+      "kind": "datafeed",
+      "name": "lazada_kitchen_broad",
+      "domain": "lazada.vn",
+      "price_from": "50000",
+      "price_to": "1500000",
+      "limit": 80,
+      "campaign_key": "LAZADA",
+      "target_category": "kitchen"
+    },
+    {
+      "kind": "datafeed",
+      "name": "lazada_storage_broad",
+      "domain": "lazada.vn",
+      "price_from": "50000",
+      "price_to": "1000000",
+      "limit": 80,
+      "campaign_key": "LAZADA",
+      "target_category": "storage"
+    },
+    {
+      "kind": "datafeed",
+      "name": "lazada_office_broad",
+      "domain": "lazada.vn",
+      "price_from": "50000",
+      "price_to": "1200000",
+      "limit": 80,
+      "campaign_key": "LAZADA",
+      "target_category": "office"
+    },
+    {
+      "kind": "datafeed",
+      "name": "shopee_home_broad",
+      "domain": "shopee.vn",
+      "price_from": "50000",
+      "price_to": "1500000",
+      "limit": 80,
+      "campaign_key": "SHOPEE",
+      "target_category": "home_living"
+    },
+    {
+      "kind": "datafeed",
+      "name": "shopee_appliance_broad",
+      "domain": "shopee.vn",
+      "price_from": "80000",
+      "price_to": "2500000",
+      "limit": 80,
+      "campaign_key": "SHOPEE",
+      "target_category": "home_appliance"
+    },
+    {
+      "kind": "datafeed",
+      "name": "shopee_office_broad",
+      "domain": "shopee.vn",
+      "price_from": "50000",
+      "price_to": "1200000",
+      "limit": 80,
+      "campaign_key": "SHOPEE",
+      "target_category": "office"
+    }
   ]
 }

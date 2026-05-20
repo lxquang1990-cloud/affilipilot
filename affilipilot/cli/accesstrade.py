@@ -65,9 +65,9 @@ def _configure_datafeed(p: argparse.ArgumentParser) -> None:
     p.add_argument("--campaign", default="")
     p.add_argument("--domain", default="")
     p.add_argument(
-        "--cat",
+        "--target-category",
         default="",
-        help="Accesstrade category code, e.g. thiet-bi-gia-dung, cong-nghe, nha-cua-doi-song",
+        help="Internal note only; Accesstrade datafeeds do not support category filtering",
     )
     p.add_argument("--status-discount", default="")
     p.add_argument("--discount-rate-from", default="")
@@ -87,7 +87,6 @@ def cmd_accesstrade_datafeed(args: argparse.Namespace) -> int:
     data = fetch_datafeeds(
         campaign=args.campaign,
         domain=args.domain,
-        cat=args.cat,
         status_discount=args.status_discount,
         discount_rate_from=args.discount_rate_from,
         price_from=args.price_from,

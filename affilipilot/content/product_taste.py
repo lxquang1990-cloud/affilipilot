@@ -22,6 +22,7 @@ LOW_FIT_CATEGORIES = {
     "auto_part": 28,
     "replacement_part": 24,
     "unknown": 18,
+    "book": 18,
     "beauty": 8,
 }
 
@@ -47,6 +48,13 @@ HARD_BLOCK_TITLE_TERMS = (
     "nhân vật hoạt hình",
     "dè chắn bùn xe đạp",
     "chắn bùn xe đạp",
+    "sừng trâu xe đạp",
+    "ghi đông",
+    "khám răng",
+    "nha sĩ",
+    "nha khoa",
+    "đồ chơi điện thoại",
+    "siêu nhân",
     "tử thần",
     "thần chết",
     "lưỡi hái",
@@ -64,10 +72,15 @@ LOW_FIT_TITLE_TERMS = (
     "phụ tùng",
     "linh kiện thay thế",
     "remote",
+    "sách tiếng anh",
+    "ngoại ngữ",
+    "tiểu thuyết",
+    "truyện tranh",
     "bo mạch",
     "mainboard",
     "adapter thay thế",
     "nhập mã",
+    "xe đạp",
 )
 
 BROAD_USE_TERMS = (

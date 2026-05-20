@@ -5,7 +5,7 @@ from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from affilipilot.content.generator import generate_safe_facebook_draft
+from affilipilot.content.regenerator import generate_until_content_gate_passes
 from affilipilot.links.subid import build_utm, make_tracking_identity
 from affilipilot.media import prepare_product_media, prepare_product_media_gallery
 from affilipilot.scoring.product_score import score_product
@@ -38,7 +38,8 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
     cards = []
     for index, (score, reasons, product) in enumerate(selected, 1):
         identity = make_tracking_identity(product.title or product.url, index, day=day)
-        draft = generate_safe_facebook_draft(product)
+        regenerated = generate_until_content_gate_passes(product)
+        draft = regenerated.draft
         card = render_approval_card(draft, post_id=identity.post_id)
         card_path = out_dir / f"{identity.post_id}.telegram.txt"
         post_path = out_dir / f"{identity.post_id}.post.txt"
@@ -59,6 +60,13 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
                 "status": draft.compliance.status.value,
                 "risk_flags": draft.compliance.risk_flags,
                 "required_edits": draft.compliance.required_edits,
+            },
+            "content_gate": {
+                "passed": regenerated.gate.passed,
+                "score": regenerated.gate.score,
+                "regenerated_count": regenerated.regenerated_count,
+                "attempts": [attempt.__dict__ for attempt in regenerated.attempts],
+                "reasons": regenerated.gate.reasons,
             },
             "media": {
                 "ok": media_result.ok,

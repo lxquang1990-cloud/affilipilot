@@ -36,7 +36,9 @@ from affilipilot.telegram.adapter import AdapterConfig, handle_text_message
 from affilipilot.telegram.delivery import build_openclaw_telegram_plan, deliver_outbox_dry_run, mark_batch_delivered, queue_approval_batch, render_batch_delivery_report, render_delivery_report, render_openclaw_telegram_plan, render_openclaw_telegram_send_report, render_outbox_preview, send_openclaw_telegram_outbox
 from affilipilot.telegram.outbox import Outbox
 from affilipilot.workflows.accesstrade_links import convert_input_links, write_converted_input
+from affilipilot.workflows.auto_source_hunter import render_auto_source_hunter, run_auto_source_hunter
 from affilipilot.workflows.discover_convert import run_discover_convert, render_discover_convert_summary
+from affilipilot.workflows.seed_auto import run_seed_auto, render_seed_auto_summary
 from affilipilot.workflows.e2e_profit import render_profit_first_e2e, run_profit_first_e2e
 from affilipilot.workflows.channel_approval import run_channel_to_approval, render_channel_to_approval
 from affilipilot.workflows.affiliate_ready import render_affiliate_ready_validation, validate_affiliate_ready_input
@@ -643,6 +645,38 @@ def cmd_validate_input(args: argparse.Namespace) -> int:
     return 0 if validation.passed else 2
 
 
+def cmd_seed_auto(args: argparse.Namespace) -> int:
+    summary = run_seed_auto(
+        seed_file=args.seed_file,
+        batch_key=args.batch_key,
+        work_dir=args.work_dir,
+        db_path=args.db,
+        outbox_path=args.outbox,
+        limit=args.limit,
+        campaign_key=args.campaign_key,
+        real_accesstrade=args.real_accesstrade,
+        publish=args.publish,
+    )
+    print(render_seed_auto_summary(summary))
+    return 0 if summary.get("returncode") == 0 else 2
+
+
+def cmd_auto_source_hunter(args: argparse.Namespace) -> int:
+    summary = run_auto_source_hunter(
+        batch_key=args.batch_key,
+        work_dir=args.work_dir,
+        db_path=args.db,
+        outbox_path=args.outbox,
+        source_config=args.source_config or None,
+        collect_limit=args.collect_limit,
+        select_limit=args.limit,
+        real_accesstrade=args.real_accesstrade,
+        queue_telegram=not args.no_queue,
+    )
+    print(render_auto_source_hunter(summary))
+    return 0 if summary.get("ok") else 2
+
+
 def cmd_accesstrade_campaigns(args: argparse.Namespace) -> int:
     registry = write_campaign_registry(args.out, approval=args.approval)
     print(f"Accesstrade campaigns: ok={registry.get('ok')} count={len(registry.get('campaigns', []))}")
@@ -652,7 +686,7 @@ def cmd_accesstrade_campaigns(args: argparse.Namespace) -> int:
     return 0 if registry.get("ok") else 2
 
 def cmd_accesstrade_datafeed(args: argparse.Namespace) -> int:
-    data = fetch_datafeeds(campaign=args.campaign, domain=args.domain, cat=args.cat, status_discount=args.status_discount, discount_rate_from=args.discount_rate_from, price_from=args.price_from, price_to=args.price_to, page=args.page, limit=args.limit)
+    data = fetch_datafeeds(campaign=args.campaign, domain=args.domain, status_discount=args.status_discount, discount_rate_from=args.discount_rate_from, price_from=args.price_from, price_to=args.price_to, page=args.page, limit=args.limit)
     write_report_json(args.out, data)
     print(f"Accesstrade datafeed: ok={data.get('ok')} products={len(data.get('products', []))}")
     print(f"Output JSON: {args.out}")
@@ -1289,6 +1323,30 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--input", required=True)
     p.set_defaults(func=cmd_validate_input)
 
+    p = sub.add_parser("seed-auto", help="Curated PDP seed file -> validation -> Accesstrade conversion -> approval/publish gates")
+    p.add_argument("--seed-file", required=True)
+    p.add_argument("--batch-key", default="seed-auto-cli")
+    p.add_argument("--work-dir", default="data/runs/seed-auto-cli")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--outbox", default="data/outbox/seed-auto-cli.json")
+    p.add_argument("--limit", type=int, default=3)
+    p.add_argument("--campaign-key", default="")
+    p.add_argument("--real-accesstrade", action="store_true")
+    p.add_argument("--publish", action="store_true")
+    p.set_defaults(func=cmd_seed_auto)
+
+    p = sub.add_parser("auto-source-hunter", help="Autonomously collect broad sources, filter, convert, draft, and queue only vetted approval cards")
+    p.add_argument("--batch-key", default="auto-source-cli")
+    p.add_argument("--work-dir", default="data/runs/auto-source-cli")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--outbox", default="data/outbox/auto-source-cli.json")
+    p.add_argument("--source-config", default="")
+    p.add_argument("--collect-limit", type=int, default=500)
+    p.add_argument("--limit", type=int, default=5)
+    p.add_argument("--real-accesstrade", action="store_true")
+    p.add_argument("--no-queue", action="store_true")
+    p.set_defaults(func=cmd_auto_source_hunter)
+
     p = sub.add_parser("accesstrade-campaigns", help="Fetch approved Accesstrade campaign registry; no publish")
     p.add_argument("--out", default="data/accesstrade/campaigns.json")
     p.add_argument("--approval", default="successful")
@@ -1299,7 +1357,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--write-input", default="")
     p.add_argument("--campaign", default="")
     p.add_argument("--domain", default="")
-    p.add_argument("--cat", default="", help="Accesstrade category code, e.g. thiet-bi-gia-dung, cong-nghe, nha-cua-doi-song")
+    p.add_argument("--target-category", default="", help="Internal note only; Accesstrade datafeeds do not support category filtering")
     p.add_argument("--status-discount", default="")
     p.add_argument("--discount-rate-from", default="")
     p.add_argument("--price-from", default="")

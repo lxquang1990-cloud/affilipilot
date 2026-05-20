@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 0.3.0 — Automation-first content/media pipeline (May 2026)
+
+### Added
+- Auto Source Hunter workflow for low-touch product input discovery, local quality filtering, link conversion, content drafting, media enrichment, approval-card queueing, and publish-safe preview.
+- Seed Auto workflow and seed hunter updates that avoid undocumented Accesstrade category filters.
+- PMO-style content Gate A/B/C and bounded regeneration before approval cards are queued.
+- Product archetype caption generation for baby care towels, feeding items, home storage, cleaning appliances, and kitchen appliances.
+- PDP media enrichment preservation for product galleries/video URLs, plus filename collision protection for CDN URLs with query params.
+- Regression tests for auto-source quality, media enrichment, content gates, content regeneration, generator archetypes, and Accesstrade docs-correct behavior.
+
+### Changed
+- Accesstrade `/v1/datafeeds` is now treated as broad/fallback input only; undocumented `cat` request filtering was removed. Use local `target_category` metadata for reporting/filtering.
+- Added Tiki CPS fallback campaign mapping for conversion.
+- Approval workflow now blocks non-publish-ready cards earlier when content/media/link metadata are insufficient.
+- Caption copy no longer emits generic checklist dumps such as “Khi xem sản phẩm, nên check kỹ…”. It uses shorter product-specific hints instead.
+- Affiliate disclosure remains required for transparency/compliance, but the default wording is shorter and less intrusive.
+- Facebook planning can now receive enriched multi-image/video metadata upstream and emit richer strategies when media gates pass.
+
+### Fixed
+- Root cause of single-image Facebook posts: upstream sources only passed one image and skipped PDP gallery enrichment before planning.
+- Media enrichment scoring now prefers larger Tiki/Lazada/Shopee product images and down-ranks thumbnails/static app assets.
+- Shopee/Lazada/Tiki discovery fallbacks are safer: blocked/unstable sources are reported and locally gated instead of bypassed.
+
+### Verification
+- `PYTHONPATH=. pytest` → 217 passed.
+
 ## 0.2.0 — Optimization pass (May 2026)
 
 ### Fixed

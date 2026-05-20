@@ -28,15 +28,16 @@ def test_datafeed_product_to_input(tmp_path):
     assert "media_source=accesstrade_api" in text
 
 
-def test_fetch_datafeeds_supports_category_param(monkeypatch):
+def test_fetch_datafeeds_uses_only_documented_params(monkeypatch):
     seen = {}
     def fake_request_json(url, *, token, timeout=30):
         seen["url"] = url
         return {"data": []}
     monkeypatch.setattr("affilipilot.accesstrade.catalog._request_json", fake_request_json)
-    data = fetch_datafeeds(config=AccesstradeConfig(token="tok"), domain="lazada.vn", cat="thiet-bi-gia-dung", limit=3)
+    data = fetch_datafeeds(config=AccesstradeConfig(token="tok"), domain="lazada.vn", limit=3)
     assert data["ok"] is True
-    assert "cat=thiet-bi-gia-dung" in seen["url"]
+    assert "domain=lazada.vn" in seen["url"]
+    assert "cat=" not in seen["url"]
 
 
 def test_match_active_deals_for_product():

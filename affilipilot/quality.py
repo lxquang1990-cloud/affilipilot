@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from affilipilot.content.content_gate import evaluate_content_gates
 from affilipilot.content.product_quality import evaluate_product_content
 from affilipilot.publishing.requirements import check_affiliate_link, check_media
 
@@ -122,6 +123,9 @@ def evaluate_quality_gate(post: dict[str, Any]) -> QualityGateResult:
     product_content = evaluate_product_content(product, text)
     if not product_content.passed:
         reasons.extend(product_content.reasons)
+    content_gates = evaluate_content_gates(product, text)
+    if not content_gates.passed:
+        reasons.extend(content_gates.reasons)
 
     if category in {"electronics", "phone", "smartphone"} or any(term in title for term in ("samsung", "iphone", "galaxy", "xiaomi", "điện thoại")):
         if "đồ tiện dùng trong sinh hoạt hằng ngày với bé" in lower_text:

@@ -89,6 +89,43 @@ python3 -m affilipilot batch-status \
   --facebook-plan data/runs/manual/manual-001-approved/facebook-plan.json
 ```
 
+
+## Automation-first source workflow
+
+Use Auto Source Hunter when the operator wants AffiliPilot to find cleaner product inputs, convert them, gate content/media/link safety, and queue only vetted approval cards.
+
+```bash
+python3 -m affilipilot auto-source-hunter \
+  --batch-key auto-source-$(date +%Y%m%dT%H%M%S) \
+  --work-dir data/runs/auto-source-$(date +%Y%m%dT%H%M%S) \
+  --db data/affilipilot.db \
+  --outbox data/outbox/auto-source.json \
+  --limit 5 \
+  --real-accesstrade
+```
+
+Operational notes:
+
+- Accesstrade datafeeds are broad/fallback input, not keyword/category search. Do not send undocumented `cat` filters.
+- Local `target_category` metadata is allowed for filtering/reporting.
+- Tiki conversion can use the known Tiki CPS fallback campaign mapping when campaign discovery is unavailable.
+- Approval cards should be sent only after content gates, media gates, affiliate-link safety, and publish metadata pass.
+- If PDP enrichment finds only thumbnails/static app assets, hold the item instead of publishing weak media.
+
+## Caption/disclosure policy
+
+Generated captions should be product/category-aware, not generic template copy. Avoid broad checklist dumps such as:
+
+```text
+Khi xem sản phẩm, nên check kỹ: dung tích, công suất, kích thước để bàn, dễ vệ sinh, bảo hành/đổi trả.
+```
+
+Use short product-specific hints instead. Affiliate disclosure remains required by default for transparency/compliance, using the current concise wording:
+
+```text
+Bài viết có link tiếp thị liên kết; page có thể nhận hoa hồng nhỏ nếu bạn mua qua link.
+```
+
 ## Automation operations
 
 Check circuit status:
@@ -157,7 +194,8 @@ Only run `facebook-publish-one` when all are true:
 1. `facebook-token-check` passes.
 2. `approve-ready` produced `publishable_dry_run` for the target post.
 3. The post was explicitly approved in the DB.
-4. The target post is harmless/test-safe or Snail explicitly approved the real publish.
+4. The target post has delivery proof and Snail explicitly approved the real publish.
+5. `publish-safe` reports PASS for the concrete post/plan.
 
 Example:
 

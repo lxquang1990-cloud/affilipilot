@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from affilipilot.content.content_gate import evaluate_content_gates
 from affilipilot.content.market_fit import evaluate_market_fit
 from affilipilot.content.product_quality import evaluate_product_content
 from affilipilot.db import AffiliPilotDB
@@ -91,10 +92,12 @@ def run_channel_to_approval(
         text = _post_text(post)
         quality_result = evaluate_quality_gate(post)
         product_content_result = evaluate_product_content(product, text)
+        content_gate_result = evaluate_content_gates(product, text)
+        manifest_content_gate = post.get("content_gate", {})
         market_result = evaluate_market_fit(product, text)
         offer_url = product.get("affiliate_url") or product.get("tracking_url") or product.get("url", "")
         offer_result = validate_offer(offer_url, expected_title=product.get("title", ""), expected_image=product.get("image_url", ""), network=False)
-        passed = quality_result.passed and product_content_result.passed and market_result.passed and offer_result.passed
+        passed = quality_result.passed and content_gate_result.passed and product_content_result.passed and market_result.passed and offer_result.passed
         if passed:
             vetted_posts.append(post)
         else:
@@ -104,6 +107,14 @@ def run_channel_to_approval(
             "passed": passed,
             "quality": {"passed": quality_result.passed, "score": quality_result.score, "reasons": quality_result.reasons},
             "product_content": {"passed": product_content_result.passed, "score": product_content_result.score, "reasons": product_content_result.reasons, "recommendations": product_content_result.recommendations},
+            "content_gates": {
+                "passed": content_gate_result.passed,
+                "score": content_gate_result.score,
+                "reasons": content_gate_result.reasons,
+                "layers": [{"layer": layer.layer, "passed": layer.passed, "score": layer.score} for layer in content_gate_result.layers],
+                "regenerated_count": manifest_content_gate.get("regenerated_count", 0),
+                "attempts": manifest_content_gate.get("attempts", []),
+            },
             "market_fit": {"passed": market_result.passed, "score": market_result.score, "reasons": market_result.reasons},
             "offer": {"passed": offer_result.passed, "score": offer_result.score, "reasons": offer_result.reasons},
         })

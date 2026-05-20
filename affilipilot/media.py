@@ -33,9 +33,19 @@ class MediaResult:
 
 
 def _safe_name(url: str, fallback: str = "product") -> str:
-    path = urlparse(url).path
+    parsed = urlparse(url)
+    path = parsed.path
     name = Path(path).name or fallback
     name = "".join(ch if ch.isalnum() or ch in ".-_" else "-" for ch in name)
+    # Tiki/Lazada CDN thumbnails often share the same basename across sizes.
+    # Include a short query-derived suffix so gallery downloads do not overwrite
+    # each other before validation/planning.
+    if parsed.query:
+        import hashlib
+        stem = Path(name).stem or fallback
+        suffix = Path(name).suffix
+        digest = hashlib.sha1(parsed.query.encode("utf-8")).hexdigest()[:8]
+        name = f"{stem}-{digest}{suffix}"
     return name[:80] or fallback
 
 

@@ -12,13 +12,14 @@ Implemented:
 
 - manual link/CSV input
 - Accesstrade campaign registry, conversion/shortlink flow, and report/order helpers
-- profit-first E2E workflow: discovery -> filtering -> scoring -> conversion -> draft -> quality gates -> approval outbox -> ready/publish-safe preview
+- profit-first E2E workflow: discovery -> filtering -> scoring -> conversion -> draft -> content gates/regeneration -> approval outbox -> ready/publish-safe preview
 - official shortlink enforcement; raw Accesstrade/isclix URLs are blocked from Facebook captions
-- product risk, taste, market-fit, content-quality, and portfolio/category-diversity gates
-- real PDP media enrichment for Shopee, including gallery images and video URLs
+- product risk, taste, market-fit, PMO-style content Gate A/B/C, and portfolio/category-diversity gates
+- automatic source hunting with Accesstrade broad-source fallback, Tiki campaign support, curated seed fallback, and local quality filtering
+- real PDP media enrichment for Shopee/Tiki/Lazada candidates, including gallery images and video URLs
 - local media/video validation and cache support
 - Facebook strategies: `single_photo`, `multi_photo`, `video_primary`, `video_primary_with_image_comment`
-- video-first publish planning when a product has valid video media
+- video-first and multi-photo publish planning when valid product media is available
 - SQLite approval state and local conversion/ROI table
 - Telegram command parser/mock adapter, local outbox, OpenClaw Telegram delivery bridge, and delivery-proof gates
 - ready-to-publish package builder and publish-safe validator
@@ -26,7 +27,7 @@ Implemented:
 - 7-day guarded auto-publish scheduler for a Facebook test window (`scripts/auto_publish_e2e.py`)
 - structured JSONL event log, circuit breaker, and `/tmp/affilipilot.KILL` kill switch
 - confidence scoring and tier classification (`auto`, `soft_gate`, `manual`, `blocked`)
-- Seed Hunter scaffold with curated keyword config, Shopee public API adapter, seed-file fallback, and seed-to-auto E2E workflow
+- Seed Hunter with curated keyword config, Shopee public API adapter, seed-file fallback, and seed-to-auto E2E workflow
 - readiness/doctor/campaign-status dashboards
 - budget tracker and daily digest/report skeletons
 
@@ -38,6 +39,19 @@ Not enabled by default:
 - third-party marketplace scraper APIs without explicit API key/config
 - anti-bot bypass for Shopee/Lazada
 - TikTok/YouTube publishing
+
+
+## Latest release notes — May 2026
+
+This version focuses on making AffiliPilot more operator-light and publish-safe:
+
+- Auto Source Hunter can collect broad Accesstrade inputs, prefer cleaner Tiki/Shopee-style candidates when available, convert links, draft captions, gate content, and queue only vetted approval cards.
+- Accesstrade `/v1/datafeeds` is treated as a broad/fallback source only; undocumented category request filters are not sent. Intended category lives as local `target_category` metadata.
+- Tiki CPS campaign fallback is supported for link conversion.
+- Content generation now uses product archetypes plus bounded regeneration before approval. Generic template phrases are blocked; caption hints are product-specific.
+- Affiliate disclosure is intentionally retained for transparency/compliance, but shortened to a less intrusive sentence.
+- PDP media enrichment preserves galleries/video URLs before Facebook planning, so valid posts can use `multi_photo` or video-first strategies instead of silently falling back to one image.
+- Publish remains guarded by delivery proof, explicit approval, `publish-safe` PASS, and explicit real publish command.
 
 ## Quick start
 

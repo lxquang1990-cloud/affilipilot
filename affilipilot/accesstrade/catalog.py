@@ -93,12 +93,12 @@ def _product_from_item(item: dict[str, Any], *, source: str) -> AccesstradeProdu
         raw=item,
     )
 
-def fetch_datafeeds(*, config: AccesstradeConfig | None = None, campaign: str = "", domain: str = "", cat: str = "", status_discount: str = "", discount_rate_from: str = "", price_from: str = "", price_to: str = "", page: int = 1, limit: int = 50, timeout: int = 30) -> dict[str, Any]:
+def fetch_datafeeds(*, config: AccesstradeConfig | None = None, campaign: str = "", domain: str = "", status_discount: str = "", discount_rate_from: str = "", price_from: str = "", price_to: str = "", page: int = 1, limit: int = 50, timeout: int = 30) -> dict[str, Any]:
     config = config or AccesstradeConfig.from_env()
     if not config.token:
         return {"ok": False, "error": "missing_ACCESSTRADE_TOKEN", "products": []}
     params = {"page": str(page), "limit": str(limit)}
-    for key, value in {"campaign": campaign, "domain": domain, "cat": cat, "status_discount": status_discount, "discount_rate_from": discount_rate_from, "price_from": price_from, "price_to": price_to}.items():
+    for key, value in {"campaign": campaign, "domain": domain, "status_discount": status_discount, "discount_rate_from": discount_rate_from, "price_from": price_from, "price_to": price_to}.items():
         if value not in (None, ""):
             params[key] = str(value)
     url = f"{config.base_url.rstrip('/')}/v1/datafeeds?{urllib.parse.urlencode(params)}"
