@@ -1,8 +1,8 @@
 # AffiliPilot Lite
 
-Money-first, approval-gated Accesstrade/Shopee affiliate assistant for SnailBot and the Facebook Page `Nâng Niu Trái Ngọt Tình Yêu`.
+Smart-shopping, approval-gated Accesstrade/Shopee/Tiki affiliate assistant for SnailBot. AffiliPilot helps find, filter, draft, approve, and publish useful Vietnamese shopping posts without being tied to one niche or one Facebook Page.
 
-AffiliPilot turns product links into scored Vietnamese Facebook drafts, runs compliance/product-quality gates, creates Telegram-style approval cards, tracks approval state, validates media/shortlinks/publish safety, and can publish to Facebook only through guarded workflows.
+AffiliPilot turns product links into scored Vietnamese drafts for “mua sắm thông minh”: practical household items, daily consumables, small tech, home organization, kitchen/cleaning tools, personal care, and mother/baby items when relevant. It runs compliance/product-quality gates, creates Telegram-style approval cards, tracks approval state, validates media/shortlinks/publish safety, and can publish to Facebook only through guarded workflows.
 
 ## Current status
 

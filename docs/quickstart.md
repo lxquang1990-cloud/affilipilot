@@ -36,7 +36,7 @@ Example files:
 
 ```text
 examples/product_links.txt
-examples/mom_baby_links.txt
+examples/mom_baby_links.txt   # legacy mother/baby sample only
 examples/products.csv
 ```
 
@@ -44,7 +44,7 @@ examples/products.csv
 
 ```bash
 python3 -m affilipilot draft-links \
-  --input examples/mom_baby_links.txt \
+  --input examples/product_links.txt \
   --work-dir data/runs/manual \
   --db data/affilipilot.db \
   --batch-key manual-001 \

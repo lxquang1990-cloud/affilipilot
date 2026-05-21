@@ -34,11 +34,11 @@ sub3 = post_id
 sub4 = product_or_campaign_id
 ```
 
-For the first Facebook Page:
+Default smart-shopping Facebook profile:
 
 ```text
 sub1 = facebook
-sub2 = nangniutraingottinhyeu
+sub2 = smartshopping
 sub3 = post_YYYYMMDD_NNN
 sub4 = product_slug_or_id
 ```
@@ -48,7 +48,7 @@ UTM:
 ```text
 utm_source = facebook
 utm_medium = page_post
-utm_campaign = affilipilot_mom_baby_YYYYMM
+utm_campaign = affilipilot_smart_shopping_YYYYMM
 utm_content = post_YYYYMMDD_NNN
 ```
 
@@ -56,9 +56,9 @@ utm_content = post_YYYYMMDD_NNN
 
 ```text
 sub1=facebook
-sub2=nangniutraingottinhyeu
+sub2=smartshopping
 sub3=post_20260516_001
-sub4=hop-chia-sua-001
+sub4=ke-nha-bep-001
 ```
 
 Later TikTok:

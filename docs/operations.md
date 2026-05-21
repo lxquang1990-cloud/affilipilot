@@ -1,6 +1,6 @@
 # AffiliPilot Operations Guide
 
-AffiliPilot Lite is a local-first, approval-gated affiliate workflow for the Facebook Page `Nâng Niu Trái Ngọt Tình Yêu`.
+AffiliPilot Lite is a local-first, approval-gated smart-shopping affiliate workflow. It is page-neutral by design and can serve any configured Facebook/Page/channel profile.
 
 ## Safety model
 
@@ -23,7 +23,7 @@ cd /home/snail/.openclaw/workspace/affilipilot
 
 ```bash
 python3 -m affilipilot draft-links \
-  --input examples/mom_baby_links.txt \
+  --input examples/product_links.txt \
   --work-dir data/runs/manual \
   --db data/affilipilot.db \
   --batch-key manual-001 \

@@ -2,11 +2,11 @@
 
 ## 1. Mission
 
-AffiliPilot Lite is a money-first affiliate operating assistant for SnailBot. Its first job is not to build a beautiful AI automation platform; its first job is to help Snail consistently create, review, publish, and learn from Shopee affiliate content via Accesstrade.
+AffiliPilot Lite is a money-first smart-shopping affiliate operating assistant for SnailBot. Its first job is not to build a beautiful AI automation platform; its first job is to help Snail consistently find useful deals/products, create short trustworthy posts, review, publish, and learn from affiliate content via Accesstrade and marketplace partners.
 
-Initial channel: Facebook Page `Nâng Niu Trái Ngọt Tình Yêu`.
+Initial channel: configurable Facebook Page/profile. The system must not be hard-bound to any single page identity.
 
-Initial niche: mother/baby, constrained to low-risk utility products.
+Initial positioning: smart shopping — small, useful, safe, good-value products. Mother/baby remains an optional category, not the product identity.
 
 ## 2. Current facts
 
@@ -36,7 +36,7 @@ Deliverables:
 
 - Project scaffold.
 - Build proposal.
-- Mother/baby compliance policy.
+- Smart-shopping compliance and product-quality policy.
 - Tracking/sub_id strategy.
 - Example product input format.
 - Product scoring skeleton.
@@ -55,7 +55,7 @@ Sprint 1 implements an assisted workflow:
 3. If Accesstrade token is available and verified, system creates tracking links with sub1-sub4 and UTM.
 4. System ranks products using money-first scoring.
 5. System generates 3-5 Vietnamese Facebook post drafts.
-6. System runs mother/baby compliance gate.
+6. System runs smart-shopping compliance/product-quality gates.
 7. System sends Telegram approval cards.
 8. On approval:
    - If Facebook publish is verified and allowed, publish/schedule.

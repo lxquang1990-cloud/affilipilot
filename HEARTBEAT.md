@@ -6,7 +6,7 @@ Production-hardened automation-first MVP. The pipeline can discover/ingest candi
 Latest verification: `PYTHONPATH=. pytest` → 217 passed.
 
 ## Objective
-Build a safe, money-first affiliate assistant for Accesstrade/Shopee/Tiki-style content on the Facebook Page `Nâng Niu Trái Ngọt Tình Yêu`, with low operator friction and strong publish guardrails.
+Build a safe, money-first smart-shopping affiliate assistant for Accesstrade/Shopee/Tiki-style content, with low operator friction and strong publish guardrails. The product is page-neutral and category-broad: household utility, daily consumables, small tech, home organization, kitchen/cleaning, personal care, and mother/baby only as one optional category.
 
 ## Current scope
 - [x] Blueprint, compliance policy, and tracking/sub_id strategy
