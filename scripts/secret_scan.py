@@ -10,7 +10,7 @@ PATTERNS = [
     re.compile(r"OPENROUTER_API_KEY\s*=\s*[^.\n][^\n]+"),
     re.compile(r"(access_token|page_access_token|token)\"?\s*:\s*\"(?!\.|\*|token|placeholder|redacted)[^\"]{12,}\"", re.IGNORECASE),
 ]
-ALLOWLIST = {"build-proposal.md", "test_config_budget_digest.py", "security.py", "test_security_readiness.py", "smoke_affilipilot.sh"}
+ALLOWLIST = {"build-proposal.md", "test_config_budget_digest.py", "security.py", "test_security_readiness.py", "smoke_affilipilot.sh", "e2e_smoke_fixture.sh"}
 
 
 def main() -> int:

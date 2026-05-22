@@ -12,5 +12,6 @@ else
   printf 'AffiliPilot verify: SKIP pytest (pytest not installed for %s)\n' "$PYTHON_BIN"
 fi
 scripts/smoke_affilipilot.sh >/tmp/affilipilot-verify-smoke.out
+scripts/e2e_smoke_fixture.sh >/tmp/affilipilot-verify-e2e-fixture.out
 "$PYTHON_BIN" scripts/secret_scan.py
 printf 'AffiliPilot verify: PASS\n'

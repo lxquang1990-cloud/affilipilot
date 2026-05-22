@@ -112,7 +112,7 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
         offer_url = post.get("product", {}).get("tracking_url") or post.get("product", {}).get("affiliate_url") or post.get("product", {}).get("url", "")
         offer = validate_offer(offer_url, expected_title=post.get("product", {}).get("title", ""), network=False)
         reasons = list(gate.reasons) + [reason for reason in quality.reasons if reason not in gate.reasons]
-        test_facebook_config = config.page_id == "page" and config.page_access_token == "token"
+        test_facebook_config = config.page_id == "page" and config.page_access_token in {"token", "placeholder"}
         product = post.get("product", {})
         if product.get("link_status") in {"suspended", "error"}:
             reasons.append(f"accesstrade_link_{product.get('link_status')}")
