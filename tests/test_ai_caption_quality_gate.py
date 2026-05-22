@@ -50,20 +50,16 @@ def test_regenerator_uses_caption_quality_gate(monkeypatch):
             )
         else:
             body = (
-                "Phù hợp với nhà cần gom chai lọ và đồ nhỏ ở bếp/phòng tắm cho dễ lấy. "
-                "Lý do đáng xem: giúp góc nhà gọn hơn, có kích thước rõ và tải trọng tốt. "
-                "Điểm kiểm chứng hiện có: giá khoảng 199.000đ, rating 4.8/5 và 1k+ lượt bán. "
-                "Trước khi chốt, nên kiểm tra: kích thước, tải trọng, chất liệu, cách lắp, ảnh review thật. "
-                "Lưu ý: đo góc định đặt và xem chính sách đổi trả trước khi mua."
+                "Kệ nhỏ giúp gom chai lọ và đồ lặt vặt ở bếp/phòng tắm gọn hơn, dễ lấy hơn và hợp với nhà cần tiết kiệm diện tích."
             )
         return ContentDraft(
             product=product,
             hook="Kệ nhỏ giúp góc bếp gọn hơn.",
             body=body,
-            cta="Xem ảnh thật, review và giá hiện tại ở link bên dưới nhé 👇",
-            disclosure="Bài viết có link tiếp thị liên kết; page có thể nhận hoa hồng nhỏ nếu bạn mua qua link.",
+            cta="Giá tham khảo trên Shopee 199.000đ, link affiliate 👇",
+            disclosure="",
             compliance=ComplianceResult(status=ComplianceStatus.PASS),
-            metadata={"caption_source": "AI" if calls["count"] == 1 else "REPAIR_FALLBACK"},
+            metadata={"caption_source": "AI"},
         )
 
     result = generate_until_content_gate_passes(product, max_regenerations=1, generator=fake_generator)

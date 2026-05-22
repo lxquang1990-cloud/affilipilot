@@ -54,8 +54,7 @@ def generate_until_content_gate_passes(
     reasons = gate.reasons + [f"caption_quality:{reason}" for reason in quality_judge.reasons]
     attempts.append(RegenerationAttempt(attempt=0, passed=passed, score=min(gate.score, quality_judge.score / 100), reasons=reasons))
 
-    total_attempts = max_regenerations + 1
-    for attempt in range(1, total_attempts + 1):
+    for attempt in range(1, max_regenerations + 1):
         if passed:
             break
         feedback = gate.reasons + gate.recommendations + quality_judge.reasons + quality_judge.recommendations

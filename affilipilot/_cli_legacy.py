@@ -12,6 +12,7 @@ from affilipilot.accesstrade.reports import fetch_order_list, render_order_summa
 from affilipilot.analytics.digest import build_daily_digest
 from affilipilot.analytics.performance import PostPerformance, record_performance, render_performance_summary, summarize_performance
 from affilipilot.analytics.roi_digest import build_roi_digest, queue_roi_digest, sync_orders_and_build_roi_digest
+from affilipilot.analytics.data_cube import SocialMetric, fetch_facebook_post_metric, latest_social_metrics, render_social_metrics, save_social_metric
 from affilipilot.budget import record_spend
 from affilipilot.config import load_config, render_config_status
 from affilipilot.content.market_fit import evaluate_market_fit, render_market_fit
@@ -30,7 +31,9 @@ from affilipilot.publishing.facebook_token import check_facebook_token, render_f
 from affilipilot.publishing.facebook_token_manager import derive_page_token, exchange_short_token, inspect_current_page_token, refresh_from_user_token, render_token_manager_result
 from affilipilot.publishing.ready_package import build_ready_to_post_package
 from affilipilot.publishing.ready_to_publish import build_ready_to_publish_report, render_ready_to_publish_report
-from affilipilot.publishing.lifecycle import record_publish_event, render_publish_status
+from affilipilot.publishing.lifecycle import record_publish_event, render_publish_status, render_publish_tasks
+from affilipilot.publishing.restrictions import render_platform_restrictions
+from affilipilot.engagement import CommentRecord, fetch_facebook_comments, list_comments, queue_comment_reply_review, render_comments, save_comment, suggest_reply
 from affilipilot.publishing.auto_publish_after_approval import publish_after_approval, render_publish_after_approval
 from affilipilot.publishing.safe_publish import render_publish_safe_validation, validate_publish_safe
 from affilipilot.readiness import build_readiness_report, render_readiness_report
@@ -386,6 +389,56 @@ def cmd_record_publish_event(args: argparse.Namespace) -> int:
     print(f"Publish event recorded: {args.batch_key}/{args.post_id} -> {args.state}")
     return 0
 
+
+def cmd_platform_restrictions(args: argparse.Namespace) -> int:
+    print(render_platform_restrictions(args.platforms))
+    return 0
+
+def cmd_publish_tasks(args: argparse.Namespace) -> int:
+    print(render_publish_tasks(args.db, batch_key=args.batch_key, post_id=args.post_id))
+    return 0
+
+def cmd_social_metrics(args: argparse.Namespace) -> int:
+    print(render_social_metrics(latest_social_metrics(args.db, post_id=args.post_id)))
+    return 0
+
+def cmd_social_metric_record(args: argparse.Namespace) -> int:
+    save_social_metric(args.db, SocialMetric(platform=args.platform, post_id=args.post_id, provider_post_id=args.provider_post_id, impressions=args.impressions, reach=args.reach, clicks=args.clicks, comments=args.comments, shares=args.shares, reactions=args.reactions, raw={"source": "cli"}))
+    print(f"Social metric recorded: {args.platform}/{args.post_id}")
+    return 0
+
+def cmd_facebook_insights_sync(args: argparse.Namespace) -> int:
+    metric = fetch_facebook_post_metric(args.provider_post_id, post_id=args.post_id)
+    save_social_metric(args.db, metric)
+    print(render_social_metrics(latest_social_metrics(args.db, post_id=metric.post_id)))
+    return 0 if not (metric.raw or {}).get("ok") is False else 2
+
+def cmd_comment_record(args: argparse.Namespace) -> int:
+    suggestion = args.reply_suggestion or (suggest_reply(args.message, product_title=args.product_title) if args.suggest else "")
+    save_comment(args.db, CommentRecord(platform=args.platform, post_id=args.post_id, provider_post_id=args.provider_post_id, comment_id=args.comment_id, author=args.author, message=args.message, reply_suggestion=suggestion, raw={"source": "cli"}))
+    print(f"Comment recorded: {args.comment_id}")
+    if suggestion:
+        print(f"Reply suggestion: {suggestion}")
+    return 0
+
+def cmd_comments(args: argparse.Namespace) -> int:
+    print(render_comments(list_comments(args.db, post_id=args.post_id, status=args.status)))
+    return 0
+
+def cmd_facebook_comments_sync(args: argparse.Namespace) -> int:
+    records = fetch_facebook_comments(args.provider_post_id, post_id=args.post_id, limit=args.limit)
+    for record in records:
+        if args.suggest:
+            record.reply_suggestion = suggest_reply(record.message)
+        save_comment(args.db, record)
+    print(f"Facebook comments synced: {len(records)}")
+    print(render_comments(list_comments(args.db, post_id=args.post_id or args.provider_post_id, status="")))
+    return 0
+
+def cmd_queue_comment_reviews(args: argparse.Namespace) -> int:
+    result = queue_comment_reply_review(args.db, outbox_path=args.outbox, post_id=args.post_id, limit=args.limit)
+    print(f"Queued comment reviews: {result['queued']} -> {result['outbox']}")
+    return 0 if result["queued"] else 2
 
 def cmd_handle_text(args: argparse.Namespace) -> int:
     outbox_path = Path(args.outbox) if args.outbox else None
@@ -1133,6 +1186,74 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("strategy", help="Render current monetization/niche strategy")
     p.add_argument("--audience", default="smart_shopping")
     p.set_defaults(func=cmd_strategy)
+
+    p = sub.add_parser("platform-restrictions", help="Show platform publishing restrictions")
+    p.add_argument("--platforms", nargs="+", default=["facebook_page"])
+    p.set_defaults(func=cmd_platform_restrictions)
+
+    p = sub.add_parser("publish-tasks", help="Show normalized publish task lifecycle state")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--batch-key", default="")
+    p.add_argument("--post-id", default="")
+    p.set_defaults(func=cmd_publish_tasks)
+
+    p = sub.add_parser("social-metrics", help="Show latest social data-cube metrics")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--post-id", default="")
+    p.set_defaults(func=cmd_social_metrics)
+
+    p = sub.add_parser("social-metric-record", help="Record social metrics manually; no external calls")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--platform", default="facebook_page")
+    p.add_argument("--post-id", required=True)
+    p.add_argument("--provider-post-id", default="")
+    p.add_argument("--impressions", type=int, default=0)
+    p.add_argument("--reach", type=int, default=0)
+    p.add_argument("--clicks", type=int, default=0)
+    p.add_argument("--reactions", type=int, default=0)
+    p.add_argument("--comments", type=int, default=0)
+    p.add_argument("--shares", type=int, default=0)
+    p.set_defaults(func=cmd_social_metric_record)
+
+    p = sub.add_parser("facebook-insights-sync", help="Sync Facebook post insights into social data cube")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--post-id", default="")
+    p.add_argument("--provider-post-id", required=True)
+    p.set_defaults(func=cmd_facebook_insights_sync)
+
+    p = sub.add_parser("comment-record", help="Record one engagement comment locally; no external calls")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--platform", default="facebook_page")
+    p.add_argument("--post-id", required=True)
+    p.add_argument("--provider-post-id", default="")
+    p.add_argument("--comment-id", required=True)
+    p.add_argument("--author", default="")
+    p.add_argument("--message", required=True)
+    p.add_argument("--reply-suggestion", default="")
+    p.add_argument("--product-title", default="")
+    p.add_argument("--suggest", action="store_true")
+    p.set_defaults(func=cmd_comment_record)
+
+    p = sub.add_parser("comments", help="List engagement comments")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--post-id", default="")
+    p.add_argument("--status", default="new")
+    p.set_defaults(func=cmd_comments)
+
+    p = sub.add_parser("facebook-comments-sync", help="Sync Facebook comments; no auto-reply")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--post-id", default="")
+    p.add_argument("--provider-post-id", required=True)
+    p.add_argument("--limit", type=int, default=25)
+    p.add_argument("--suggest", action="store_true")
+    p.set_defaults(func=cmd_facebook_comments_sync)
+
+    p = sub.add_parser("queue-comment-reviews", help="Queue Telegram review cards for new comments; no auto-reply")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--outbox", default="data/outbox/telegram.json")
+    p.add_argument("--post-id", default="")
+    p.add_argument("--limit", type=int, default=10)
+    p.set_defaults(func=cmd_queue_comment_reviews)
 
     p = sub.add_parser("publish-status", help="Show latest publish lifecycle state for a batch")
     p.add_argument("--db", default="data/affilipilot.db")
