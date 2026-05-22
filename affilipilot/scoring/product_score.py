@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
+import os
+
+from affilipilot.content.niche_policy import evaluate_niche_fit
 from affilipilot.models import ProductCandidate
+from affilipilot.scoring.shopee_sourcing import score_shopee_sourcing
 
 PROFIT_CATEGORY_BONUS = {
     "electronics": 12,
@@ -11,10 +15,16 @@ PROFIT_CATEGORY_BONUS = {
     "laptop": 10,
     "computer": 10,
     "phone_accessory": 8,
+    "electronics_small": 8,
+    "home_consumable": 10,
+    "home_organization": 10,
+    "kitchen": 9,
+    "cleaning": 9,
+    "personal_care": 5,
     "home_appliance": 12,
     "home_living": 9,
     "beauty": 6,
-    "mother_baby": 6,
+    "mother_baby": 4,
     "baby_care": 6,
     "toy": 5,
     "storage": 7,
@@ -49,6 +59,26 @@ TRUSTED_MERCHANT_HINTS = {
 SPAM_TITLE_TERMS = ("siêu rẻ", "hot hit", "cam kết khỏi", "trị dứt điểm", "tăng đề kháng", "giảm cân", "sinh lý")
 FACT_TERMS = ("bảo hành", "chính hãng", "discount_rate=", "discount_vnd=", "giảm", "sale", "combo", "dung tích", "kích thước", "công suất", "pin", "bộ nhớ")
 COMMERCIAL_TERMS = ("giảm", "sale", "deal", "bảo hành", "chính hãng", "trả góp", "tiện", "gọn", "combo")
+FEEDBACK_CATEGORY_KEY = "AFFILIPILOT_FEEDBACK_CATEGORY_BONUS"
+
+
+def _feedback_category_bonus(category: str) -> tuple[int, str]:
+    raw = os.environ.get(FEEDBACK_CATEGORY_KEY, "")
+    if not raw:
+        return 0, ""
+    bonuses: dict[str, int] = {}
+    for item in raw.split(","):
+        if ":" not in item:
+            continue
+        key, value = item.split(":", 1)
+        try:
+            bonuses[key.strip().lower()] = int(value.strip())
+        except ValueError:
+            continue
+    bonus = bonuses.get(category.lower(), 0)
+    if not bonus:
+        return 0, ""
+    return bonus, f"performance_feedback_category:{category}{'+' if bonus >= 0 else ''}{bonus}"
 
 
 def _discount_rate(product: ProductCandidate) -> float | None:
@@ -102,6 +132,11 @@ def score_product(product: ProductCandidate) -> dict[str, int | list[str]]:
         score += bonus
         reasons.append(f"profit_category_bonus:{category}+{bonus}")
 
+    feedback_bonus, feedback_reason = _feedback_category_bonus(category)
+    if feedback_bonus:
+        score += feedback_bonus
+        reasons.append(feedback_reason)
+
     penalty = RISKY_CATEGORY_PENALTY.get(category, 0)
     if penalty:
         score -= penalty
@@ -149,6 +184,11 @@ def score_product(product: ProductCandidate) -> dict[str, int | list[str]]:
         score += merchant_score
         reasons.append(merchant_reason)
 
+    shopee_sourcing = score_shopee_sourcing(product)
+    if shopee_sourcing.score:
+        score += shopee_sourcing.score
+        reasons.extend(shopee_sourcing.reasons)
+
     text = f"{product.title} {product.notes}".lower()
     if any(word in text for word in COMMERCIAL_TERMS):
         score += 8
@@ -157,6 +197,13 @@ def score_product(product: ProductCandidate) -> dict[str, int | list[str]]:
     fact_score, fact_reasons = _content_fact_score(product)
     score += fact_score
     reasons.extend(fact_reasons)
+
+    niche = evaluate_niche_fit(product)
+    niche_adjustment = round((niche.score - 50) * 0.35)
+    score += niche_adjustment
+    reasons.append(f"niche_fit:{niche.score}{'+' if niche_adjustment >= 0 else ''}{niche_adjustment}")
+    reasons.extend(niche.reasons)
+    reasons.extend(niche.penalties)
 
     if product.image_url or product.image_urls or product.image_path:
         score += 5

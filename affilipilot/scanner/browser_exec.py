@@ -29,10 +29,16 @@ def browser_render_discover(url: str, *, out_path: str | Path, source: str = "AU
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=headless)
-            page = browser.new_page(user_agent="Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 AffiliPilot/1.0")
-            page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            page = browser.new_page(user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+            response = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
             page.wait_for_timeout(wait_ms)
             html = page.content()
+            # Shopee may redirect anonymous browser sessions to a verify/error page,
+            # while still embedding PDP initial data in the returned HTML. If the
+            # first wait catches only the shell, give it one more short settle pass.
+            if "text/mfe-initial-data" not in html and "shopee.vn/verify/traffic" in page.url:
+                page.wait_for_timeout(min(wait_ms, 5000))
+                html = page.content()
             browser.close()
     except Exception as exc:
         return BrowserExecutionResult(ok=False, error=f"browser_render_failed:{exc}")

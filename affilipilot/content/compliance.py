@@ -60,4 +60,13 @@ def check_mom_baby_compliance(text: str, *, category: str = "unknown") -> Compli
 
 
 def default_affiliate_disclosure() -> str:
-    return "Bài viết có link tiếp thị liên kết; page có thể nhận hoa hồng nhỏ nếu bạn mua qua link."
+    return affiliate_cta_disclosure()
+
+
+def affiliate_cta_disclosure(*, provider: str = "", price_vnd: int | None = None) -> str:
+    provider = (provider or "sàn").strip()
+    if price_vnd:
+        price = f"{int(price_vnd):,}".replace(",", ".") + "đ"
+    else:
+        price = "xem tại link"
+    return f"Giá tham khảo trên {provider} {price}, link affiliate 👇"

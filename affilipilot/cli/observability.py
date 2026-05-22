@@ -7,6 +7,7 @@ Commands:
     score-tier           Score products and classify into tier
     conversion-record    Insert/upsert one conversion row
     conversion-summary   Render local conversion/ROI summary
+    performance-feedback Build published-post → order feedback report
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ from affilipilot.analytics.conversions import (
     summarize_conversions,
     upsert_conversion,
 )
+from affilipilot.analytics.feedback import build_feedback_report, render_feedback_report, write_feedback_json
 from affilipilot.cli._registry import register
 from affilipilot.observability.circuit_breaker import (
     check_circuit,
@@ -146,4 +148,18 @@ def _configure_conversion_summary(p: argparse.ArgumentParser) -> None:
 @register("conversion-summary", help="Summarize local conversion/ROI table", configure=_configure_conversion_summary)
 def cmd_conversion_summary(args: argparse.Namespace) -> int:
     print(render_conversion_summary(summarize_conversions(args.db)))
+    return 0
+
+def _configure_performance_feedback(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--batch-key", default="")
+    p.add_argument("--out", default="")
+
+@register("performance-feedback", help="Build published-post to Accesstrade order feedback report", configure=_configure_performance_feedback)
+def cmd_performance_feedback(args: argparse.Namespace) -> int:
+    report = build_feedback_report(args.db, batch_key=args.batch_key)
+    print(render_feedback_report(report))
+    if args.out:
+        write_feedback_json(args.out, report)
+        print(f"Output JSON: {args.out}")
     return 0

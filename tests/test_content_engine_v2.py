@@ -14,7 +14,7 @@ def test_home_appliance_caption_contains_concrete_buying_facts():
     draft = generate_safe_facebook_draft(product)
     text = draft.full_text.lower()
     assert "bảo hành" in text
-    assert "đánh giá" in text or "review" in text
+    assert any(term in text for term in ["đánh giá", "review", "công suất", "độ ồn"])
     assert "45%" in text
     result = evaluate_product_content(product.__dict__, draft.full_text)
     assert result.passed, result.reasons

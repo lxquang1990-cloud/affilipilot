@@ -11,15 +11,16 @@ class NicheStrategy:
     daily_post_limit: int = 2
     rules: list[str] = field(default_factory=list)
 
-def default_strategy(*, audience: str = "profit_first") -> NicheStrategy:
-    if audience in {"profit_first", "diverse", "general", "multi_niche"}:
+def default_strategy(*, audience: str = "smart_shopping") -> NicheStrategy:
+    if audience in {"smart_shopping", "profit_first", "diverse", "general", "multi_niche"}:
         return NicheStrategy(
-            primary_lane="profit_first_multi_category",
-            secondary_lanes=["high_commission", "strong_discount", "high_ticket_with_clear_rationale", "seasonal_deals"],
+            primary_lane="smart_shopping_multi_category",
+            secondary_lanes=["household_utility", "daily_consumables", "home_organization", "small_tech", "high_commission", "strong_discount", "seasonal_deals"],
             blocked_lanes=["unsafe_health_claims", "adult_gambling", "unknown_offer", "raw_affiliate_links", "low_quality_generic_copy"],
             daily_post_limit=3,
             rules=[
-                "Do not lock discovery to one niche; prioritize commission, discount strength, merchant trust, and offer validity.",
+                "Do not lock discovery to one old niche or page; prioritize useful, easy-to-verify products for smart shopping.",
+                "Prioritize commission, discount strength, merchant trust, offer validity, and a concrete everyday use case.",
                 "Every approval card must explain the commercial reason: commission, deal, price band, warranty, or urgency.",
                 "High-ticket products need concrete buying rationale before approval/publish.",
                 "Do not publish if offer validation, media provenance, shortlink, approval, or content quality gates fail.",

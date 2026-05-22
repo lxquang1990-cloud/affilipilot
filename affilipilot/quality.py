@@ -62,7 +62,7 @@ def is_product_detail_url(url: str) -> bool:
     if "cellphones.com.vn" in host:
         return path.endswith(".html") and len(path.strip("/")) > 8
     if "shopee." in host:
-        return "-i." in path or bool(path.strip("/"))
+        return "shopee.vn" in host and ("-i." in path or path.startswith("/product/"))
     return any(hint in lower for hint in PRODUCT_DETAIL_HINTS)
 
 
@@ -101,7 +101,7 @@ def evaluate_quality_gate(post: dict[str, Any]) -> QualityGateResult:
     lower_text = text.lower()
     category = str(product.get("category", "")).lower()
     title = str(product.get("title", "")).lower()
-    if "tiếp thị liên kết" not in lower_text and "hoa hồng" not in lower_text:
+    if "tiếp thị liên kết" not in lower_text and "hoa hồng" not in lower_text and "affiliate" not in lower_text:
         reasons.append("missing_affiliate_disclosure")
     if len(text.strip()) < 120:
         reasons.append("caption_too_short")

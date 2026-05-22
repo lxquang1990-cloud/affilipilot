@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
+from typing import Any, List, Optional
 
 
 class ComplianceStatus(str, Enum):
@@ -79,6 +79,7 @@ class ContentDraft:
     cta: str
     disclosure: str
     compliance: ComplianceResult
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def full_text(self) -> str:

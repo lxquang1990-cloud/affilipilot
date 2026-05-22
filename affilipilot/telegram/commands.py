@@ -30,6 +30,13 @@ def _has_product_links(text: str) -> bool:
     return "shopee." in lowered or "accesstrade" in lowered or "http" in lowered
 
 
+def _decision_args(parts: list[str]) -> dict[str, str]:
+    # Backward-compatible: /aff_approve <post_id> [reason]
+    # Batch-safe: /aff_approve <batch_key> <post_id> [reason]
+    if len(parts) >= 3 and parts[2].startswith("post_"):
+        return {"batch_key": parts[1], "post_id": parts[2], "reason": " ".join(parts[3:])}
+    return {"post_id": parts[1], "reason": " ".join(parts[2:])}
+
 def parse_telegram_text(text: str) -> ParsedCommand:
     raw = text.strip()
     lowered = raw.lower()
@@ -47,13 +54,13 @@ def parse_telegram_text(text: str) -> ParsedCommand:
     if cmd == "/doctor":
         return ParsedCommand(TelegramIntent.DOCTOR, {"batch_key": parts[1] if len(parts) > 1 else "latest"}, raw)
     if cmd in {"/aff_approve", "/ap_approve", "/ok_aff"} and len(parts) >= 2:
-        return ParsedCommand(TelegramIntent.APPROVE, {"post_id": parts[1], "reason": " ".join(parts[2:])}, raw)
+        return ParsedCommand(TelegramIntent.APPROVE, _decision_args(parts), raw)
     if cmd in {"/aff_reject", "/ap_reject", "/no_aff"} and len(parts) >= 2:
-        return ParsedCommand(TelegramIntent.REJECT, {"post_id": parts[1], "reason": " ".join(parts[2:])}, raw)
+        return ParsedCommand(TelegramIntent.REJECT, _decision_args(parts), raw)
     if cmd in {"/aff_edit", "/ap_edit", "/aff_needs_edit"} and len(parts) >= 2:
-        return ParsedCommand(TelegramIntent.NEEDS_EDIT, {"post_id": parts[1], "reason": " ".join(parts[2:])}, raw)
+        return ParsedCommand(TelegramIntent.NEEDS_EDIT, _decision_args(parts), raw)
     if cmd in {"/aff_blacklist", "/ap_blacklist", "/aff_ban"} and len(parts) >= 2:
-        return ParsedCommand(TelegramIntent.BLACKLIST, {"post_id": parts[1], "reason": " ".join(parts[2:])}, raw)
+        return ParsedCommand(TelegramIntent.BLACKLIST, _decision_args(parts), raw)
     if cmd == "/batch":
         body = raw.split("\n", 1)[1] if "\n" in raw else ""
         return ParsedCommand(TelegramIntent.CREATE_BATCH, {"body": body}, raw)
@@ -73,8 +80,8 @@ def help_text() -> str:
         "/campaign_status [batch_key] — one-screen campaign dashboard",
         "/next_action [batch_key] — show exact next operator step",
         "/doctor [batch_key] — read-only system/batch audit",
-        "/aff_approve <post_id> [reason]",
-        "/aff_reject <post_id> [reason]",
-        "/aff_edit <post_id> [reason]",
-        "/aff_blacklist <post_id> [reason]",
+        "/aff_approve <batch_key> <post_id> [reason]",
+        "/aff_reject <batch_key> <post_id> [reason]",
+        "/aff_edit <batch_key> <post_id> [reason]",
+        "/aff_blacklist <batch_key> <post_id> [reason]",
     ])

@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from affilipilot.content.compliance import check_mom_baby_compliance, default_affiliate_disclosure
+from affilipilot.content.ai_caption import generate_ai_caption
+from affilipilot.content.caption_planner import build_caption_plan, render_caption_body_v2, render_hook_v2
+from affilipilot.content.caption_quality_ai import judge_caption_quality
+from affilipilot.content.compliance import affiliate_cta_disclosure, check_mom_baby_compliance
+from affilipilot.content.content_gate import evaluate_content_gates
 from urllib.parse import urlparse
 
-from affilipilot.models import ContentDraft, ProductCandidate
+from affilipilot.models import ComplianceStatus, ContentDraft, ProductCandidate
 
 @dataclass(frozen=True)
 class ProductArchetype:
@@ -46,6 +50,12 @@ ARCHETYPES: tuple[ProductArchetype, ...] = (
         use_case="phù hợp nếu thói quen nấu nướng của nhà thật sự cần thêm một món hỗ trợ hằng ngày",
         buying_checks=("dung tích", "công suất", "kích thước để bàn", "dễ vệ sinh", "bảo hành/đổi trả"),
     ),
+    ProductArchetype(
+        code="household_tissue",
+        hook="Nhà có trẻ nhỏ hay bếp/phòng ăn dùng nhiều khăn giấy thì nên chọn loại rút êm tay, không bụi và đủ dai khi lau nhanh.",
+        use_case="hợp để đặt ở bàn ăn, bếp, xe hoặc túi đi chơi khi cần lau tay, lau miệng và xử lý vết đổ nhỏ trong ngày",
+        buying_checks=("số tờ/lớp giấy", "độ mềm", "ít bụi giấy", "kích thước tờ", "đóng gói dễ rút", "review khi lau ướt nhẹ"),
+    ),
 )
 
 
@@ -63,6 +73,26 @@ def _product_name(product: ProductCandidate) -> str:
         short = " ".join(words[:12]).strip()
     return short or title[:90].strip()
 
+
+
+def _provider_label(product: ProductCandidate) -> str:
+    text = " ".join([product.url, product.original_url, product.notes, product.campaign_key, product.source if hasattr(product, "source") else ""]).lower()
+    if "shopee" in text:
+        return "Shopee"
+    if "lazada" in text:
+        return "Lazada"
+    if "tiki" in text:
+        return "Tiki"
+    if "cellphones" in text:
+        return "CellphoneS"
+    host = urlparse(product.original_url or product.url).netloc.lower()
+    if "shopee" in host:
+        return "Shopee"
+    if "lazada" in host:
+        return "Lazada"
+    if "tiki" in host:
+        return "Tiki"
+    return "sàn"
 
 def _price_hint(product: ProductCandidate) -> str:
     if product.price_vnd:
@@ -144,19 +174,23 @@ def _pick_archetype(product: ProductCandidate) -> ProductArchetype | None:
         return next(a for a in ARCHETYPES if a.code == "cleaning_appliance")
     if any(term in text for term in ("nồi chiên", "máy xay", "máy ép", "ấm siêu tốc", "nồi cơm", "bếp", "lò nướng")):
         return next(a for a in ARCHETYPES if a.code == "kitchen_appliance")
+    if any(term in text for term in ("khăn giấy", "giấy ăn", "giấy rút", "tissue", "khăn ăn")):
+        return next(a for a in ARCHETYPES if a.code == "household_tissue")
     return None
 
 def _check_hint(archetype: ProductArchetype) -> str:
     if archetype.code == "home_storage":
         return "Nên đối chiếu kích thước thực tế, chất liệu và cách lắp/treo với góc nhà định dùng."
     if archetype.code == "cleaning_appliance":
-        return "Nên xem công suất/dung tích, độ ồn và bảo hành để tránh mua nhầm loại không hợp nhà."
+        return "Nên xem công suất/dung tích, độ ồn, bảo hành và review ảnh thật để tránh mua nhầm loại không hợp nhà."
     if archetype.code == "baby_care_towel":
         return "Nên xem chất liệu, kích thước và review sau giặt để tránh khăn bị thô hoặc nhiều bụi vải."
     if archetype.code == "feeding_bottle_cup":
         return "Nên xem chất liệu, dung tích và phần tháo rời có dễ vệ sinh không."
     if archetype.code == "kitchen_appliance":
         return "Nên đối chiếu dung tích/công suất với nhu cầu nấu thật của nhà."
+    if archetype.code == "household_tissue":
+        return "Nên xem số lớp/số tờ, độ mềm, bụi giấy, kích thước tờ và review khi lau tay hoặc lau bếp."
     return ""
 
 def _archetype_copy(product: ProductCandidate, name: str, archetype: ProductArchetype) -> tuple[str, str]:
@@ -183,16 +217,18 @@ def _interest_hashtags(product: ProductCandidate) -> str:
         return "#dogiadung #nhacuasachgon #dealgiadung"
     if category == "baby_play" or any(term in text for term in ("bể bơi", "hồ bơi", "cầu trượt", "nhà nhún", "nhún nhảy", "xe tập đi", "xe chòi chân")):
         if "xe tập đi" in text or "xe chòi chân" in text:
-            return "#xetapdi #xechoichan #mevabe #dodungchobe #shopee"
+            return "#xetapdi #xechoichan #dodungchobe #muasamthongminh"
         if "nhà nhún" in text or "nhún nhảy" in text:
-            return "#nhanhun #chobevui #mevabe #dodungchobe #shopee"
-        return "#chobevui #mevabe #dodungchobe #shopee"
+            return "#nhanhun #chobevui #dodungchobe #muasamthongminh"
+        return "#chobevui #dodungchobe #muasamthongminh"
     if "khăn sữa" in text or "khan sua" in text or category == "baby_care":
-        return "#khansua #mevabe #dodungchobe"
+        return "#khansua #dodungchobe #muasamthongminh"
     if "feeding" in text or category == "feeding":
-        return "#andam #mevabe #dodungchobe"
-    if "storage" in text or category == "storage":
-        return "#sapxepnhacua #mevabe #nhacuasachgon"
+        return "#andam #dodungchobe #muasamthongminh"
+    if "storage" in text or category in {"storage", "home_organization"}:
+        return "#sapxepnhacua #dogiadung #muasamthongminh"
+    if any(term in text for term in ("khăn giấy", "giấy ăn", "giấy rút", "tissue", "khăn ăn")) or category == "home_consumable":
+        return "#khangiay #dogiadung #nhacuasachgon"
     if category == "beauty":
         return "#lamdep #dealhot"
     if category in {"sports", "football", "sport"} or "giày đá bóng" in text or "bóng đá" in text:
@@ -251,19 +287,21 @@ def _baby_play_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
         body = f"{name} phù hợp nếu gia đình muốn bé có thêm hoạt động vận động tại nhà. Trước khi chốt nên xem kỹ kích thước, tải trọng, chất liệu, bề mặt tiếp xúc, ảnh/review thật và cách cất gọn sau khi chơi. {_price_hint(product)} {_merchant_hint(product)} Đồ chơi vận động luôn cần đặt ở khu vực an toàn và có người lớn theo dõi."
     return hook, body
 
+def _planned_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
+    plan = build_caption_plan(product)
+    return render_hook_v2(product, name, plan), render_caption_body_v2(product, name, plan)
+
 def _generic_profit_copy(product: ProductCandidate, name: str) -> tuple[str, str]:
-    archetype = _pick_archetype(product)
-    if archetype:
-        return _archetype_copy(product, name, archetype)
-    hook = f"{name} là món nên xem kỹ nhu cầu sử dụng thật trước khi chốt mua."
-    body = f"Hãy ưu tiên thông tin cụ thể: kích thước, chất liệu, cách dùng, ảnh/review thật và chính sách đổi trả. {_discount_hint(product)} {_price_hint(product)} {_merchant_hint(product)} Nếu giá tốt nhưng mô tả sản phẩm mơ hồ thì nên bỏ qua."
-    return hook, body
+    return _planned_copy(product, name)
 
 
 def _repair_copy(product: ProductCandidate, name: str, feedback: list[str]) -> tuple[str, str]:
+    archetype = _pick_archetype(product)
+    if archetype:
+        return _archetype_copy(product, name, archetype)
     lower_feedback = " ".join(feedback).lower()
     category = product.category.lower()
-    hook = f"{name} chỉ đáng mua khi thông tin sản phẩm đủ rõ và hợp đúng việc cần dùng."
+    hook = f"{name}: xem nhanh công dụng thật, thông số chính và review ảnh trước khi bấm mua."
     checks = ["kích thước", "chất liệu", "cách dùng thực tế", "ảnh/review thật", "đổi trả"]
     if "feeding" in lower_feedback or category == "feeding":
         hook = "Đồ ăn dặm nên dễ vệ sinh, chất liệu rõ ràng và hợp tay bé khi dùng hằng ngày."
@@ -281,32 +319,73 @@ def _repair_copy(product: ProductCandidate, name: str, feedback: list[str]) -> t
         hook = "Đồ công nghệ nên chọn theo nhu cầu thật: pin, bộ nhớ, camera, bảo hành và độ ổn định khi dùng lâu."
         checks = ["pin", "bộ nhớ/dung lượng", "camera hoặc màn hình", "bảo hành", "review hiệu năng thực tế"]
     body = (
-        f"{name} phù hợp để cân nhắc nếu các thông tin chính đều rõ ràng, không chỉ vì đang được gắn nhãn sale. "
+        f"{name} nên được đánh giá bằng công dụng thật và dữ kiện kiểm chứng được, không phải nhãn sale. "
         f"Trước khi chốt nên kiểm tra: {', '.join(checks)}. "
         f"{_price_hint(product)} {_merchant_hint(product)} Nếu mô tả hoặc ảnh thật chưa đủ rõ thì nên bỏ qua thay vì cố mua."
     )
     return hook, re.sub(r"\s+", " ", body).strip()
 
-def generate_safe_facebook_draft(product: ProductCandidate, *, feedback: list[str] | None = None) -> ContentDraft:
+def _draft_from_parts(product: ProductCandidate, hook: str, body: str, *, metadata: dict | None = None) -> ContentDraft:
+    cta = ""
+    disclosure = affiliate_cta_disclosure(provider=_provider_label(product), price_vnd=product.price_vnd) + "\n" + _interest_hashtags(product)
+    compliance = check_mom_baby_compliance("\n\n".join([hook, body, cta, disclosure]), category=product.category)
+    return ContentDraft(product=product, hook=hook, body=body, cta=cta, disclosure=disclosure, compliance=compliance, metadata=metadata or {})
+
+def generate_safe_facebook_draft(product: ProductCandidate, *, feedback: list[str] | None = None, prefer_ai: bool = True) -> ContentDraft:
     name = _product_name(product)
     category = product.category.lower()
 
+    ai_reason = "ai_not_attempted"
+    safety_feedback: list[str] = []
+    if category == "baby_play" or any(term in product.title.lower() for term in ("bể bơi", "hồ bơi", "cầu trượt", "nhà nhún", "nhún nhảy", "xe tập đi", "xe chòi chân")):
+        safety_feedback.append("Đồ vận động/trẻ em: không viết warning/checklist dài; không dùng câu 'Trước khi mua...' hoặc 'luôn để người lớn quan sát'. Caption chỉ nêu benefit tự nhiên, ngắn gọn.")
+    if category in {"home_appliance", "home_living"} and not feedback:
+        safety_feedback.append("Đồ gia dụng: nhắc bảo hành/review/thông số chính nếu phù hợp, nhưng không viết checklist dài.")
+
+    if prefer_ai:
+        ai_feedback = list(feedback or []) + safety_feedback
+        ai = generate_ai_caption(product, feedback=ai_feedback)
+        ai_reason = getattr(ai, "reason", "") or ("ai_caption_ok" if ai.ok else "ai_caption_failed")
+        if ai.ok:
+            draft = _draft_from_parts(product, ai.hook, ai.body, metadata={"caption_source": "AI", "ai_provider": getattr(ai, "provider", ""), "ai_reason": ai_reason, "ai_feedback": ai_feedback})
+            content_gate = evaluate_content_gates(product.__dict__, draft.full_text)
+            quality_judge = judge_caption_quality(product, draft.full_text)
+            draft.metadata.update({
+                "caption_quality_passed": quality_judge.passed,
+                "caption_quality_score": quality_judge.score,
+                "caption_quality_source": quality_judge.source,
+                "caption_quality_reasons": quality_judge.reasons,
+                "caption_quality_recommendations": quality_judge.recommendations,
+            })
+            category_specific_reasons: list[str] = []
+            lowered_text = draft.full_text.lower()
+            if category in {"home_appliance", "home_living"}:
+                if "bảo hành" not in lowered_text:
+                    category_specific_reasons.append("missing_warranty_context")
+                if "review" not in lowered_text and "đánh giá" not in lowered_text:
+                    category_specific_reasons.append("missing_review_context")
+            if draft.compliance.status == ComplianceStatus.PASS and content_gate.passed and quality_judge.passed and not category_specific_reasons:
+                return draft
+            ai_reason = "ai_caption_gate_failed:" + ",".join(category_specific_reasons or content_gate.reasons or quality_judge.reasons or draft.compliance.required_edits or draft.compliance.risk_flags or [draft.compliance.status.value])
+            draft.metadata["ai_reason"] = ai_reason
+            return draft
+
+    caption_source = "PLANNER_FALLBACK"
     if feedback:
         hook, body = _repair_copy(product, name, feedback)
-    elif category in {"home_appliance", "home_living", "storage"}:
-        hook, body = _home_appliance_copy(product, name)
+        caption_source = "REPAIR_FALLBACK"
+        ai_reason = "fallback_after_ai_retries:" + ",".join(feedback[:5])
+    elif category in {"home_appliance", "home_living", "storage", "home_consumable"}:
+        hook, body = _planned_copy(product, name)
     elif category in {"electronics", "phone", "smartphone", "laptop", "computer", "phone_accessory", "office_productivity"}:
-        hook, body = _electronics_copy(product, name)
+        hook, body = _planned_copy(product, name)
     elif category == "baby_play" or any(term in product.title.lower() for term in ("bể bơi", "hồ bơi", "cầu trượt", "nhà nhún", "nhún nhảy", "xe tập đi", "xe chòi chân")):
         hook, body = _baby_play_copy(product, name)
     elif category in {"baby_care", "mother_baby", "feeding", "toy"}:
-        hook, body = _baby_copy(product, name)
+        hook, body = _planned_copy(product, name)
     elif category in {"sports", "football", "sport"} or "giày đá bóng" in product.title.lower() or "bóng đá" in product.title.lower():
         hook, body = _sports_copy(product, name)
     else:
         hook, body = _generic_profit_copy(product, name)
 
-    cta = "Xem ảnh thật, review và giá hiện tại ở link bên dưới nhé 👇"
-    disclosure = default_affiliate_disclosure() + "\n" + _interest_hashtags(product)
-    compliance = check_mom_baby_compliance("\n\n".join([hook, body, cta, disclosure]), category=product.category)
-    return ContentDraft(product=product, hook=hook, body=body, cta=cta, disclosure=disclosure, compliance=compliance)
+    return _draft_from_parts(product, hook, body, metadata={"caption_source": caption_source, "ai_reason": ai_reason})

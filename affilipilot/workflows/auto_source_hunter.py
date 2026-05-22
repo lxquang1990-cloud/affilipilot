@@ -10,6 +10,7 @@ from affilipilot.accesstrade.catalog import AccesstradeProduct, fetch_datafeeds,
 from affilipilot.content.early_filter import evaluate_early_product_filter
 from affilipilot.content.market_fit import evaluate_market_fit
 from affilipilot.content.product_quality import evaluate_product_content
+from affilipilot.content.niche_policy import POSITIONING, evaluate_niche_fit
 from affilipilot.content.product_taste import evaluate_product_taste
 from affilipilot.db import AffiliPilotDB
 from affilipilot.offer import validate_offer
@@ -19,6 +20,7 @@ from affilipilot.scoring.product_score import score_product
 from affilipilot.scanner.enrich import enrich_product_from_url
 from affilipilot.sources.manual_input import parse_link_lines
 from affilipilot.telegram.delivery import queue_approval_batch
+from affilipilot.telegram.outbox import Outbox, OutboxMessage
 from affilipilot.workflows.accesstrade_links import convert_input_links, write_converted_input
 from affilipilot.workflows.approval import create_approval_batch
 
@@ -50,16 +52,20 @@ HIGH_INTENT_TERMS = (
 )
 
 AUTO_BROAD_ALLOWED_CATEGORIES = {
+    "home_consumable",
+    "home_organization",
+    "kitchen",
+    "cleaning",
     "home_appliance",
     "home_living",
     "storage",
     "office_productivity",
-    "mother_baby",
-    "baby_care",
-    "feeding",
+    "electronics_small",
+    "phone_accessory",
+    "personal_care",
 }
 
-AUTO_BROAD_CONDITIONAL_CATEGORIES = {"toy", "electronics", "unknown", "book"}
+AUTO_BROAD_CONDITIONAL_CATEGORIES = {"mother_baby", "baby_care", "feeding", "toy", "electronics", "unknown", "book"}
 
 
 def _candidate_line(product) -> str:
@@ -224,6 +230,7 @@ def run_auto_source_hunter(
     candidates_by_url: dict[str, dict[str, Any]] = {}
     early_blocked: list[dict[str, Any]] = []
     taste_blocked: list[dict[str, Any]] = []
+    niche_blocked: list[dict[str, Any]] = []
 
     per_source_limit = max(1, collect_limit // max(1, len(sources)))
     collected = 0
@@ -240,6 +247,10 @@ def run_auto_source_hunter(
                 early_blocked.append({"source": source.get("name"), "title": product.title, "category": product.category, "reasons": early.reasons})
                 continue
             product.category = early.normalized_category
+            niche = evaluate_niche_fit(product)
+            if not niche.passed:
+                niche_blocked.append({"source": source.get("name"), "title": product.title, "category": product.category, "score": niche.score, "reasons": niche.reasons, "penalties": niche.penalties})
+                continue
             taste = evaluate_product_taste(product)
             if not taste.passed:
                 taste_blocked.append({"source": source.get("name"), "title": product.title, "category": product.category, "reasons": taste.reasons, "penalties": taste.penalties})
@@ -250,12 +261,12 @@ def run_auto_source_hunter(
             if not auto_fit_ok:
                 taste_blocked.append({"source": source.get("name"), "title": product.title, "category": product.category, "reasons": auto_fit_reasons, "penalties": title_reasons})
                 continue
-            final_score = int(scored["score"]) + taste.score + title_adjustment + int(source.get("weight", 0))
-            if final_score < 100:
-                taste_blocked.append({"source": source.get("name"), "title": product.title, "category": product.category, "reasons": ["auto_broad_score_below_threshold"], "penalties": title_reasons})
+            final_score = int(scored["score"]) + taste.score + niche.score + title_adjustment + int(source.get("weight", 0))
+            if final_score < 165:
+                taste_blocked.append({"source": source.get("name"), "title": product.title, "category": product.category, "reasons": ["auto_broad_score_below_threshold"], "score": final_score, "penalties": title_reasons})
                 continue
             key = (product.url or product.original_url or product.title).split("?", 1)[0].lower()
-            item = {"product": product, "score": final_score, "score_reasons": list(scored.get("reasons", [])) + taste.reasons + taste.penalties + title_reasons + auto_fit_reasons, "source": source.get("name")}
+            item = {"product": product, "score": final_score, "score_reasons": list(scored.get("reasons", [])) + niche.reasons + niche.penalties + taste.reasons + taste.penalties + title_reasons + auto_fit_reasons, "source": source.get("name")}
             if key and (key not in candidates_by_url or item["score"] > candidates_by_url[key]["score"]):
                 candidates_by_url[key] = item
                 accepted += 1
@@ -278,7 +289,20 @@ def run_auto_source_hunter(
         conversion = convert_input_links(selected_input, converted_json, dry_run=not real_accesstrade, limit=select_limit, campaign_key="", allow_channel_urls=False)
         write_converted_input(converted_json, converted_input)
     if not converted_input.exists() or converted_input.stat().st_size == 0:
-        summary = {"ok": False, "reason": "no_converted_input", "batch_key": batch_key, "work_dir": str(work_dir), "source_reports": source_reports, "candidate_count": len(ranked), "selected_count": len(selected), "early_blocked_count": len(early_blocked), "taste_blocked_count": len(taste_blocked), "conversion": conversion}
+        queued_digest = False
+        if queue_telegram:
+            digest_text = "\n".join([
+                "🐌 AffiliPilot scheduled digest",
+                f"Batch: {batch_key}",
+                "Status: no publish-ready approval cards",
+                f"Candidates: {len(ranked)} | selected: {len(selected)} | converted: {conversion.get('ok_count', 0)}",
+                f"Early blocked: {len(early_blocked)} | niche blocked: {len(niche_blocked)} | taste blocked: {len(taste_blocked)}",
+                f"Work dir: {work_dir}",
+                "Next: improve sourcing/filtering or review artifacts; no post was silently published.",
+            ])
+            Outbox(outbox_path).add(OutboxMessage(id=f"{batch_key}:digest", kind="digest", text=digest_text))
+            queued_digest = True
+        summary = {"ok": False, "reason": "no_converted_input", "batch_key": batch_key, "positioning": POSITIONING, "work_dir": str(work_dir), "source_reports": source_reports, "candidate_count": len(ranked), "selected_count": len(selected), "early_blocked_count": len(early_blocked), "niche_blocked_count": len(niche_blocked), "taste_blocked_count": len(taste_blocked), "early_blocked": early_blocked[:20], "niche_blocked": niche_blocked[:20], "taste_blocked": taste_blocked[:20], "conversion": conversion, "outbox_path": str(outbox_path), "queued_messages": 1 if queued_digest else 0, "queued_approval_cards": 0, "queued_digest": queued_digest}
         (work_dir / "auto-source-hunter-summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return summary
 
@@ -303,6 +327,18 @@ def run_auto_source_hunter(
     manifest["filtered_posts"] = [p.get("post_id") for p in original_posts if p not in vetted_posts]
     AffiliPilotDB(db_path).save_batch(batch_key=batch_key, source=str(converted_input), manifest=manifest)
     messages = queue_approval_batch(db_path, batch_key=batch_key, outbox_path=outbox_path) if queue_telegram and vetted_posts else []
+    if queue_telegram and not vetted_posts:
+        digest_text = "\n".join([
+            "🐌 AffiliPilot scheduled digest",
+            f"Batch: {batch_key}",
+            "Status: no publish-ready approval cards",
+            f"Candidates: {len(ranked)} | selected: {len(selected)} | converted: {conversion.get('ok_count', 0)}",
+            f"Early blocked: {len(early_blocked)} | niche blocked: {len(niche_blocked)} | taste blocked: {len(taste_blocked)} | gate filtered: {len(original_posts)}",
+            f"Work dir: {work_dir}",
+            "Next: improve sourcing/filtering or review artifacts; no post was silently published.",
+        ])
+        Outbox(outbox_path).add(OutboxMessage(id=f"{batch_key}:digest", kind="digest", text=digest_text))
+        messages = Outbox(outbox_path).load()
     approval_card_count = sum(1 for message in messages if message.kind == "approval_card")
     ready = build_ready_to_publish_report(db_path=db_path, batch_key=batch_key, outbox_path=outbox_path, out_dir=publish_dir)
     summary = {
@@ -310,6 +346,7 @@ def run_auto_source_hunter(
         "reason": "ready_for_operator_approval" if vetted_posts else "no_vetted_posts",
         "batch_key": batch_key,
         "work_dir": str(work_dir),
+        "positioning": POSITIONING,
         "db_path": str(db_path),
         "outbox_path": str(outbox_path),
         "source_reports": source_reports,
@@ -317,11 +354,16 @@ def run_auto_source_hunter(
         "selected_count": len(selected),
         "early_blocked_count": len(early_blocked),
         "taste_blocked_count": len(taste_blocked),
+        "niche_blocked_count": len(niche_blocked),
+        "early_blocked": early_blocked[:20],
+        "niche_blocked": niche_blocked[:20],
+        "taste_blocked": taste_blocked[:20],
         "conversion": {"total": conversion.get("total", 0), "ok_count": conversion.get("ok_count", 0), "failed_count": conversion.get("failed_count", 0), "dry_run": conversion.get("dry_run")},
         "vetted_count": len(vetted_posts),
         "filtered_count": len(original_posts) - len(vetted_posts),
         "queued_messages": len(messages),
         "queued_approval_cards": approval_card_count,
+        "queued_digest": bool(queue_telegram and not vetted_posts),
         "ready_to_publish": {k: ready.get(k) for k in ("ready_count", "held_count", "publish_safe_pass_count", "publish_safe_block_count", "report_path")},
         "gates": gates,
         "candidates_input": str(candidates_input),
@@ -350,12 +392,14 @@ def render_auto_source_hunter(summary: dict[str, Any]) -> str:
         "",
         "Pipeline:",
         f"- candidates: {summary.get('candidate_count', 0)}",
+        f"- positioning: {summary.get('positioning', POSITIONING)}",
         f"- early blocked: {summary.get('early_blocked_count', 0)}",
+        f"- niche blocked: {summary.get('niche_blocked_count', 0)}",
         f"- taste blocked: {summary.get('taste_blocked_count', 0)}",
         f"- selected: {summary.get('selected_count', 0)}",
         f"- conversion: ok={conv.get('ok_count', 0)} failed={conv.get('failed_count', 0)} dry_run={conv.get('dry_run')}",
         f"- vetted: {summary.get('vetted_count', 0)} filtered={summary.get('filtered_count', 0)}",
-        f"- queued messages: {summary.get('queued_messages', 0)} approval_cards={summary.get('queued_approval_cards', 0)}",
+        f"- queued messages: {summary.get('queued_messages', 0)} approval_cards={summary.get('queued_approval_cards', 0)} digest={summary.get('queued_digest', False)}",
         f"- ready: {ready.get('ready_count', 0)} held={ready.get('held_count', 0)} publish-safe-pass={ready.get('publish_safe_pass_count', 0)}",
         "",
         "Artifacts:",

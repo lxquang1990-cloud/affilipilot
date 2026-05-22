@@ -4,7 +4,8 @@ from affilipilot.content.compliance import default_affiliate_disclosure, check_m
 from affilipilot.workflows.daily_batch import build_batch
 
 
-def test_regenerator_uses_gate_feedback_and_stops_after_pass():
+def test_regenerator_uses_gate_feedback_and_stops_after_pass(monkeypatch):
+    monkeypatch.setenv("AFFILIPILOT_AI_CAPTION_JUDGE", "false")
     product = ProductCandidate(url="https://shopee.vn/p", title="Bình thìa ăn dặm silicone", category="feeding")
     calls = []
 

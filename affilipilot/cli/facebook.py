@@ -21,6 +21,7 @@ from pathlib import Path
 from affilipilot.cli._registry import register
 from affilipilot.publishing.facebook import publish_post  # backward-compatible test patch target
 from affilipilot.publishing.facebook_plan import plan_facebook_batch, render_facebook_plan
+from affilipilot.publishing.lifecycle import record_publish_event
 from affilipilot.publishing.facebook_token import check_facebook_token, render_facebook_token_report
 from affilipilot.publishing.facebook_token_manager import (
     derive_page_token,
@@ -107,6 +108,19 @@ def cmd_facebook_publish_one(args: argparse.Namespace) -> int:
 
     payload = item.get("payload_preview", {})
     result = dispatch_publish_strategy(item, payload)
+
+    if args.batch_key:
+        response = result.get("response", {}) if isinstance(result.get("response"), dict) else {}
+        facebook_id = response.get("id") or response.get("post_id") or ""
+        record_publish_event(
+            args.db,
+            batch_key=args.batch_key,
+            post_id=args.post_id,
+            state="published" if result.get("ok") else "failed",
+            facebook_post_id=facebook_id if result.get("ok") else "",
+            reason="facebook_publish_one" if result.get("ok") else "facebook_publish_failed",
+            payload={"result": result},
+        )
 
     # Defense-in-depth: even though publish_post/photo/video already redact,
     # apply one more pass before writing to disk in case a strategy returns

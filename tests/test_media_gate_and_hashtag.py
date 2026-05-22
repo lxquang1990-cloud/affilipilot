@@ -27,6 +27,6 @@ def test_harvest_image_urls_filters_lazada_ui_assets():
 def test_generator_uses_interest_hashtags_not_internal_campaign_hashtags():
     draft = generate_safe_facebook_draft(ProductCandidate(url="https://www.lazada.vn/tag/x", title="Bình thìa", category="feeding", notes="lazada"))
     assert "#andam" in draft.full_text
-    assert "#mevabe" in draft.full_text
+    assert "#muasamthongminh" in draft.full_text
     assert "#LazadaAffiliate" not in draft.full_text
     assert "#ShopeeAffiliate" not in draft.full_text

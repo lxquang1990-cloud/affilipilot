@@ -167,7 +167,10 @@ def render_facebook_plan(plan: FacebookBatchPlan) -> str:
     ]
     for item in plan.plans:
         if item.status == "publishable_dry_run":
-            text = item.payload_preview.get('message') or item.payload_preview.get('caption') or ''
+            # Feed/photo payloads use `message`/`caption`; Facebook video uploads
+            # use `description`. Render the same public text field that will be
+            # posted so operators do not see a false "0 chars" for video plans.
+            text = item.payload_preview.get('message') or item.payload_preview.get('caption') or item.payload_preview.get('description') or ''
             lines.append(f"✅ {item.post_id}: would POST {item.endpoint} ({len(text)} chars)")
         else:
             lines.append(f"○ {item.post_id}: blocked — {', '.join(item.reasons)}")

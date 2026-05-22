@@ -23,7 +23,7 @@ def test_product_content_passes_specific_khan_sua_copy():
     Set khăn muslin cotton này đáng xem nếu mẹ cần khăn mềm, dễ giặt, ít bụi vải và hợp da bé.
     Xem chi tiết sản phẩm, đánh giá shop và giá hiện tại ở link bên dưới nhé.
     Bài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ.
-    #khansua #mevabe #dodungchobe #mebim
+    #khansua #dodungchobe #muasamthongminh
     """
     result = evaluate_product_content(product, text)
     assert result.passed, result.reasons

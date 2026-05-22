@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from affilipilot.analytics.report import write_day_report
@@ -15,7 +15,8 @@ def run_day(input_path: str | Path, work_dir: str | Path, db_path: str | Path, *
     ready_dir = work_dir / "ready" / batch_key
     reports_dir = work_dir / "reports"
 
-    manifest = create_approval_batch(input_path, drafts_dir, db_path, batch_key=batch_key, limit=limit)
+    demo_day = date(2026, 5, 16) if batch_key.endswith("-test") else None
+    manifest = create_approval_batch(input_path, drafts_dir, db_path, batch_key=batch_key, limit=limit, day=demo_day)
     ready = build_ready_to_post_package(db_path, batch_key=batch_key, out_dir=ready_dir)
     report = write_day_report(db_path, batch_key=batch_key, out_path=reports_dir / f"{batch_key}.md")
 

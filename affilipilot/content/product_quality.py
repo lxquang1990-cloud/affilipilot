@@ -10,14 +10,19 @@ GENERIC_BAD_PHRASES = (
     "lý do mình cần sản phẩm này",
     "tùy nhu cầu",
     "tùy ngân sách",
+    "thông tin sản phẩm đủ rõ",
+    "các thông tin chính đều rõ ràng",
+    "hợp đúng việc cần dùng",
+    "không chỉ vì đang được gắn nhãn sale",
 )
 INTERNAL_HASHTAGS = ("#tiepthilienket", "#cellphonesaffiliate", "#lazadaaffiliate", "#shopeeaffiliate")
 TECH_TERMS = ("cấu hình", "ram", "chip", "camera", "pin", "bảo hành")
 BABY_CARE_TERMS = ("mềm", "cotton", "muslin", "sợi tre", "thấm", "bụi vải", "giặt", "da bé", "lau", "sơ sinh")
 HOME_APPLIANCE_TERMS = ("công suất", "kích thước", "bảo hành", "đổi trả", "review", "đánh giá", "sinh hoạt", "trong nhà", "dung tích", "độ ồn")
-ELECTRONICS_TERMS = ("pin", "bộ nhớ", "cấu hình", "bảo hành", "camera", "dung lượng", "làm việc", "học tập")
+ELECTRONICS_TERMS = ("pin", "bộ nhớ", "cấu hình", "bảo hành", "camera", "dung lượng", "làm việc", "học tập", "điện áp", "dòng", "công suất", "adapter", "đầu cắm", "jack", "nguồn")
 FEEDING_TERMS = ("ăn dặm", "vệ sinh", "chất liệu", "dung tích", "dễ rửa", "tháo rời", "an toàn thực phẩm", "bé cầm")
 STORAGE_TERMS = ("gọn", "sắp xếp", "kích thước", "tải trọng", "chất liệu", "lắp", "treo", "đồ nhỏ", "review")
+HOUSEHOLD_TISSUE_TERMS = ("số tờ", "lớp giấy", "độ mềm", "ít bụi", "bụi giấy", "dai", "lau tay", "lau miệng", "lau bếp", "dễ rút", "đóng gói")
 RISKY_CLAIM_TERMS = ("điều trị", "chữa", "trị dứt điểm", "tăng đề kháng", "giảm cân", "đường huyết", "tiểu đường", "tăng chiều cao")
 
 @dataclass
@@ -93,14 +98,20 @@ def evaluate_product_content(product: dict[str, Any], text: str) -> ProductConte
             recommendations.append("Mention real storage use case, size, load, material, installation, or review photos.")
             score -= 30
 
+    if category == "home_consumable" or any(term in title for term in ("khăn giấy", "giấy ăn", "giấy rút", "tissue", "khăn ăn")):
+        if not any(term in lower for term in HOUSEHOLD_TISSUE_TERMS):
+            reasons.append("missing_household_tissue_purchase_rationale")
+            recommendations.append("Mention sheet/layer count, softness, lint/dust, wipe use case, pull-pack convenience, or real review context.")
+            score -= 35
+
     if any(term in combined for term in RISKY_CLAIM_TERMS):
         reasons.append("risky_health_or_body_claim")
         recommendations.append("Remove medical/health/body-change claims from affiliate copy.")
         score -= 60
 
-    if len(lower.strip()) < 180:
+    if len(lower.strip()) < 90:
         reasons.append("content_too_thin")
-        recommendations.append("Add a concrete use case, buying checklist, and clear CTA.")
+        recommendations.append("Add one concise, concrete use case plus clear CTA.")
         score -= 15
 
     score = max(0, min(100, score))

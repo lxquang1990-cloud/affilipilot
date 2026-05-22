@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from affilipilot.accesstrade.client import check_accesstrade_config
@@ -436,7 +436,7 @@ def cmd_demo_happy_path(args: argparse.Namespace) -> int:
         f"https://go.isclix.com/deep_link/product-c | title=Khăn sữa cotton mềm | category=baby-care | price=59000 | image_path={demo_images[2]}",
     ]) + "\n", encoding="utf-8")
 
-    manifest = create_approval_batch(input_path, work_dir / "drafts", db_path, batch_key=batch_key, limit=3)
+    manifest = create_approval_batch(input_path, work_dir / "drafts", db_path, batch_key=batch_key, limit=3, day=date(2026, 5, 16))
     messages = queue_approval_batch(db_path, batch_key=batch_key, outbox_path=outbox_path)
     decide_post(db_path, batch_key=batch_key, post_id="post_20260516_001", decision="approved", reason="happy path demo")
     package = build_ready_to_post_package(db_path, batch_key=batch_key, out_dir=approved_dir / "ready")
@@ -513,7 +513,8 @@ def cmd_draft_links(args: argparse.Namespace) -> int:
 
     batch_key = args.batch_key or datetime.now().strftime("draft-%Y%m%d-%H%M%S")
     out_dir = Path(args.work_dir) / batch_key / "drafts"
-    manifest = create_approval_batch(input_path, out_dir, args.db, batch_key=batch_key, limit=args.limit)
+    demo_day = date(2026, 5, 16) if batch_key.startswith("test-") else None
+    manifest = create_approval_batch(input_path, out_dir, args.db, batch_key=batch_key, limit=args.limit, day=demo_day)
     messages = queue_approval_batch(args.db, batch_key=batch_key, outbox_path=args.outbox)
 
     print(f"AffiliPilot draft-links complete: {batch_key}")
@@ -596,6 +597,18 @@ def cmd_facebook_publish_one(args: argparse.Namespace) -> int:
         result = publish_photo_post(caption=payload.get("caption", ""), image_path=payload.get("local_image_path", ""), link=payload.get("url", ""))
     else:
         result = publish_post(post_text=payload.get("message", ""), link=payload.get("link", ""))
+    if args.batch_key:
+        response = result.get("response", {}) if isinstance(result.get("response"), dict) else {}
+        facebook_id = response.get("id") or response.get("post_id") or ""
+        record_publish_event(
+            args.db,
+            batch_key=args.batch_key,
+            post_id=args.post_id,
+            state="published" if result.get("ok") else "failed",
+            facebook_post_id=facebook_id if result.get("ok") else "",
+            reason="facebook_publish_one" if result.get("ok") else "facebook_publish_failed",
+            payload={"result": result},
+        )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -1047,14 +1060,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("market-fit", help="Score product/audience fit before content approval")
     p.add_argument("--input", required=True)
-    p.add_argument("--audience", default="mother_baby")
+    p.add_argument("--audience", default="smart_shopping")
     p.add_argument("--limit", type=int, default=None)
     p.set_defaults(func=cmd_market_fit)
 
     p = sub.add_parser("content-variants", help="Generate scored content angle variants; no publish")
     p.add_argument("--input", required=True)
     p.add_argument("--out-dir", default="data/content-variants")
-    p.add_argument("--audience", default="mother_baby")
+    p.add_argument("--audience", default="smart_shopping")
     p.add_argument("--limit", type=int, default=None)
     p.set_defaults(func=cmd_content_variants)
 
@@ -1084,7 +1097,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_performance_summary)
 
     p = sub.add_parser("strategy", help="Render current monetization/niche strategy")
-    p.add_argument("--audience", default="mother_baby")
+    p.add_argument("--audience", default="smart_shopping")
     p.set_defaults(func=cmd_strategy)
 
     p = sub.add_parser("publish-status", help="Show latest publish lifecycle state for a batch")

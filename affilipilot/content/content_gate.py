@@ -55,6 +55,16 @@ def _layer(layer: str, checks: list[GateCheck], threshold: float) -> GateLayerRe
 def _has_any(text: str, terms: tuple[str, ...]) -> bool:
     return any(term in text for term in terms)
 
+GENERIC_TEMPLATE_PHRASES = (
+    "đừng chỉ nhìn giá",
+    "nhu cầu, ngân sách và bối cảnh",
+    "sản phẩm này phù hợp hơn khi nhu cầu",
+    "thông tin sản phẩm đủ rõ",
+    "các thông tin chính đều rõ ràng",
+    "hợp đúng việc cần dùng",
+    "không chỉ vì đang được gắn nhãn sale",
+)
+
 
 def _category_specific_check(product: dict[str, Any], text: str) -> GateCheck:
     category = str(product.get("category", "")).lower()
@@ -71,13 +81,16 @@ def _category_specific_check(product: dict[str, Any], text: str) -> GateCheck:
     if category in {"baby_care", "mother_baby"} or _has_any(combined, ("khăn sữa", "khăn xô", "khăn muslin")):
         terms = ("mềm", "cotton", "muslin", "sợi tre", "thấm", "bụi vải", "giặt", "da bé", "lau")
         return GateCheck("category_specific.baby_care", _has_any(lower, terms), 1.3, True, "baby-care needs material/skin/usage context", "Rewrite with softness, material, absorbency, washing, lint, and baby-skin fit.")
+    if category == "home_consumable" or _has_any(combined, ("khăn giấy", "giấy ăn", "giấy rút", "tissue", "khăn ăn")):
+        terms = ("số tờ", "lớp giấy", "độ mềm", "ít bụi", "bụi giấy", "dai", "lau tay", "lau miệng", "lau bếp", "dễ rút", "đóng gói")
+        return GateCheck("category_specific.household_tissue", _has_any(lower, terms), 1.4, True, "tissue copy needs concrete household usage and material context", "Rewrite with use case, sheet/layer count, softness, lint/dust, pull-pack convenience, and real review checks.")
     if category in {"home_appliance", "home_living"}:
         terms = ("công suất", "dung tích", "kích thước", "độ ồn", "bảo hành", "đổi trả", "review", "đánh giá")
         return GateCheck("category_specific.home_appliance", _has_any(lower, terms), 1.2, True, "home appliance needs spec/warranty/review context", "Rewrite with capacity/power/size/noise/warranty/review-photo checks.")
     if category in {"electronics", "phone", "smartphone", "laptop", "computer"}:
-        terms = ("pin", "bộ nhớ", "cấu hình", "bảo hành", "camera", "dung lượng", "làm việc", "học tập")
-        return GateCheck("category_specific.electronics", _has_any(lower, terms), 1.2, True, "electronics needs practical spec rationale", "Rewrite with battery/storage/camera/config/warranty/practical usage rationale.")
-    return GateCheck("category_specific.generic", _has_any(lower, ("kích thước", "chất liệu", "cách dùng", "review", "đánh giá", "đổi trả")), 1.0, False, "generic products need concrete buying facts", "Add product-specific use case and buying checklist.")
+        terms = ("pin", "bộ nhớ", "cấu hình", "bảo hành", "camera", "dung lượng", "làm việc", "học tập", "điện áp", "dòng", "công suất", "adapter", "đầu cắm", "jack", "nguồn")
+        return GateCheck("category_specific.electronics", _has_any(lower, terms), 1.2, True, "electronics needs practical spec rationale", "Rewrite with battery/storage/camera/config/warranty or adapter voltage/current/jack rationale.")
+    return GateCheck("category_specific.generic", True, 1.0, False, "minimal caption policy: generic products need one concrete benefit, not a checklist", "Keep one product-specific benefit sentence.")
 
 
 def evaluate_content_gates(product: dict[str, Any], text: str) -> ContentGateResult:
@@ -86,10 +99,10 @@ def evaluate_content_gates(product: dict[str, Any], text: str) -> ContentGateRes
     market_result = evaluate_market_fit(product, text)
 
     gate_a = _layer("A", [
-        GateCheck("text.min_length", len(text.strip()) >= 150, 1.0, True, f"length={len(text.strip())}", "Add use case, buying checklist, and CTA."),
-        GateCheck("disclosure.present", "tiếp thị liên kết" in lower or "hoa hồng" in lower, 1.0, True, "affiliate disclosure required", "Add plain-language affiliate disclosure."),
+        GateCheck("text.min_length", len(text.strip()) >= 90, 1.0, True, f"length={len(text.strip())}", "Keep one concise benefit sentence plus CTA."),
+        GateCheck("disclosure.present", "tiếp thị liên kết" in lower or "hoa hồng" in lower or "affiliate" in lower, 1.0, True, "affiliate disclosure required", "Add plain-language affiliate disclosure."),
         GateCheck("no.internal_hashtag", "#tiepthilienket" not in lower and "#shopeeaffiliate" not in lower and "#lazadaaffiliate" not in lower, 1.0, True, "internal hashtags must not be public", "Remove internal affiliate/network hashtags."),
-        GateCheck("no.generic_template", not any(p in lower for p in ("đừng chỉ nhìn giá", "nhu cầu, ngân sách và bối cảnh", "sản phẩm này phù hợp hơn khi nhu cầu")), 1.2, True, "generic AI affiliate phrases are blocked", "Rewrite from product archetype, not generic template."),
+        GateCheck("no.generic_template", not any(p in lower for p in GENERIC_TEMPLATE_PHRASES), 1.2, True, "generic AI affiliate phrases are blocked", "Rewrite from product archetype, not generic template."),
     ], threshold=1.0)
 
     gate_b = _layer("B", [
@@ -100,7 +113,7 @@ def evaluate_content_gates(product: dict[str, Any], text: str) -> ContentGateRes
 
     gate_c = _layer("C", [
         GateCheck("ready.no_blockers", gate_a.passed and gate_b.passed, 2.0, True, "Gate A and B must pass", "Do not send to Telegram approval until Gate A/B pass."),
-        GateCheck("ready.clear_cta", ("link" in lower and ("xem" in lower or "kiểm tra" in lower)) or "tiếp thị liên kết" in lower, 0.8, False, "CTA should be visible", "Add clear CTA to review photos, price, and product page."),
+        GateCheck("ready.clear_cta", ("link" in lower and ("xem" in lower or "kiểm tra" in lower or "affiliate" in lower)) or "tiếp thị liên kết" in lower, 0.8, False, "CTA should be visible", "Add clear CTA to review photos, price, and product page."),
         GateCheck("ready.no_unsafe_claims", not any(term in lower for term in ("điều trị", "chữa", "tăng đề kháng", "giảm cân", "tăng chiều cao")), 1.2, True, "unsafe claims blocked", "Remove medical/body-change claims."),
     ], threshold=0.9)
 

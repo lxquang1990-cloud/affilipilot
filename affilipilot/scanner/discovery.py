@@ -133,9 +133,105 @@ def _card_product_items(html_text: str, *, base_url: str, source: str, category:
     return _dedupe_discovered_items(items, limit=limit)
 
 
+
+def _shopee_image_url(image_id: str) -> str:
+    image_id = str(image_id or "").strip()
+    if not image_id:
+        return ""
+    if image_id.startswith("http"):
+        return image_id
+    return f"https://down-vn.img.susercontent.com/file/{image_id}"
+
+def _shopee_video_url(video: dict[str, Any]) -> str:
+    video_id = str(video.get("video_id") or "").strip()
+    if video_id.startswith("http"):
+        return video_id
+    if video_id:
+        return f"https://down-vn.img.susercontent.com/file/{video_id}"
+    formats = video.get("formats") if isinstance(video.get("formats"), list) else []
+    for fmt in formats:
+        if isinstance(fmt, dict) and fmt.get("path"):
+            path = str(fmt["path"])
+            if path.startswith("http"):
+                return path
+            return f"https://down-vn.img.susercontent.com/file/{path}"
+    return ""
+
+def _price_from_shopee(value: Any) -> int | None:
+    if not isinstance(value, (int, float)) or value <= 0:
+        return None
+    # Shopee API prices are commonly scaled by 100000.
+    if value >= 100000:
+        return int(round(value / 100000))
+    return int(value)
+
+def _shopee_pdp_initial_items(html_text: str, *, page_url: str, source: str, category: str, limit: int | None = None) -> list[ProductScanItem]:
+    if "shopee." not in urlparse(page_url).netloc.lower() and "shopee." not in page_url.lower():
+        return []
+    items: list[ProductScanItem] = []
+    scripts = re.finditer(r'<script[^>]+type=["\']text/mfe-initial-data["\'][^>]*>(.*?)</script>', html_text, flags=re.I | re.S)
+    for match in scripts:
+        try:
+            data = json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+        cached = (((data.get("initialState") or {}).get("DOMAIN_PDP") or {}).get("data") or {}).get("PDP_BFF_DATA", {}).get("cachedMap", {})
+        if not isinstance(cached, dict):
+            continue
+        for key, entry in cached.items():
+            item = entry.get("item") if isinstance(entry, dict) else None
+            if not isinstance(item, dict):
+                continue
+            shop_id = item.get("shop_id") or item.get("shopid")
+            item_id = item.get("item_id") or item.get("itemid")
+            if not shop_id or not item_id:
+                if "/" in str(key):
+                    shop_id, item_id = str(key).split("/", 1)
+            if not shop_id or not item_id:
+                continue
+            images = [_shopee_image_url(img) for img in (item.get("images") or [])]
+            images = [url for url in images if url]
+            image = _shopee_image_url(item.get("image")) or (images[0] if images else "")
+            if image and image not in images:
+                images.insert(0, image)
+            videos = [_shopee_video_url(v) for v in (item.get("video_info_list") or []) if isinstance(v, dict)]
+            videos = [url for url in videos if url]
+            price = _price_from_shopee(item.get("price") or item.get("price_min"))
+            if price is None:
+                for model in item.get("models") or []:
+                    if isinstance(model, dict):
+                        price = _price_from_shopee(model.get("price"))
+                        if price is not None:
+                            break
+            title = _clean_text(str(item.get("title") or item.get("name") or ""))
+            items.append(ProductScanItem(
+                url=f"https://shopee.vn/product/{shop_id}/{item_id}",
+                title=title,
+                category=category,
+                price_vnd=price,
+                image_url=image,
+                source=source,
+                notes="shopee_pdp_initial_data",
+                raw={
+                    "parser": "shopee_pdp_initial_data",
+                    "media_source": "shopee_pdp" if image else "",
+                    "media_confidence": "high" if image else "",
+                    "image_urls": images,
+                    "video_urls": videos,
+                    "rating_star": (item.get("item_rating") or {}).get("rating_star") if isinstance(item.get("item_rating"), dict) else None,
+                    "shop_location": item.get("shop_location", ""),
+                    "brand": item.get("brand", ""),
+                },
+            ))
+            if limit and len(items) >= limit:
+                return _dedupe_discovered_items(items, limit=limit)
+    return _dedupe_discovered_items(items, limit=limit)
+
 def discover_product_details_from_html(html_text: str, *, page_url: str, source: str = "AUTO", category: str = "unknown", limit: int = 10) -> DiscoveryResult:
     source = (source or "AUTO").upper()
-    items = _card_product_items(html_text, base_url=page_url, source=source, category=category, limit=limit)
+    items = _shopee_pdp_initial_items(html_text, page_url=page_url, source=source, category=category, limit=limit)
+    if not items:
+        items = _card_product_items(html_text, base_url=page_url, source=source, category=category, limit=limit)
     seen = {_normalize_product_url(item.url) for item in items}
     if len(items) < limit:
         for url in _lazada_product_links_from_text(html_text, page_url):

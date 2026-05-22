@@ -40,9 +40,9 @@ def test_performance_summary_groups_by_category_and_angle(tmp_path):
     assert summary["by_angle"]["family_camera"]["conversions"] == 1
 
 
-def test_default_strategy_profit_first_by_default():
+def test_default_strategy_smart_shopping_by_default():
     strategy = default_strategy()
-    assert strategy.primary_lane == "profit_first_multi_category"
+    assert strategy.primary_lane == "smart_shopping_multi_category"
     assert "raw_affiliate_links" in strategy.blocked_lanes
 
 

@@ -10,7 +10,21 @@ from affilipilot.models import ProductCandidate
 _PRODUCT_PATTERNS = (
     re.compile(r"-i\.(\d+)\.(\d+)", re.I),
     re.compile(r"/product/(\d+)/(\d+)", re.I),
+    # Shopee shortlinks may resolve to /<slug>/<shopid>/<itemid>?__mobile__=1.
+    re.compile(r"/[^/?#]+/(\d{6,})/(\d{6,})(?:[/?#]|$)", re.I),
 )
+
+def canonical_product_url(url: str) -> str:
+    """Return canonical Shopee /product/<shopid>/<itemid> URL when ids are present."""
+    parsed = urlparse(url.strip())
+    normalized = urlunparse(parsed._replace(query="", fragment=""))
+    path = parsed.path
+    for pattern in _PRODUCT_PATTERNS:
+        match = pattern.search(path)
+        if match:
+            shop_id, item_id = match.group(1), match.group(2)
+            return f"https://shopee.vn/product/{shop_id}/{item_id}"
+    return normalized
 
 
 class ShopeeAdapter:
@@ -20,7 +34,7 @@ class ShopeeAdapter:
         parsed = urlparse(url.strip())
         host = parsed.netloc.lower()
         path = parsed.path.lower()
-        normalized = urlunparse(parsed._replace(fragment=""))
+        normalized = canonical_product_url(url)
         if "shopee." not in host and "s.shopee." not in host:
             return UrlClassification(self.name, "external", normalized, ["host_not_shopee"])
         if "s.shopee." in host:

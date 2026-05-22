@@ -63,6 +63,14 @@ class ScanResult:
         }
 
 
+
+
+def resolve_http_url(url: str, *, timeout: int = 20) -> str:
+    """Resolve redirects with browser-like headers; return final URL without fetching twice downstream."""
+    req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.geturl()
+
 def fetch_html(url: str, *, timeout: int = 30) -> str:
     req = urllib.request.Request(url, headers=DEFAULT_HEADERS)
     with urllib.request.urlopen(req, timeout=timeout) as resp:

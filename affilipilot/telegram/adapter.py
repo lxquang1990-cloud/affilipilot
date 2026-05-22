@@ -117,7 +117,7 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
         return AdapterResult(command.intent, render_doctor_report(report), [])
 
     if command.intent in {TelegramIntent.APPROVE, TelegramIntent.REJECT, TelegramIntent.NEEDS_EDIT, TelegramIntent.BLACKLIST}:
-        batch_key = _latest_batch_key(config.db_path)
+        batch_key = command.args.get("batch_key") or _latest_batch_key(config.db_path)
         if not batch_key:
             return AdapterResult(command.intent, "No batch found yet.", [])
         decision_map = {
@@ -129,7 +129,19 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
         post_id = command.args["post_id"]
         reason = command.args.get("reason", "")
         decision = decision_map[command.intent]
-        decide_post(config.db_path, batch_key=batch_key, post_id=post_id, decision=decision, reason=reason)
+        try:
+            decide_post(config.db_path, batch_key=batch_key, post_id=post_id, decision=decision, reason=reason)
+        except KeyError:
+            # Backward-compatible shorthand: if the operator used an old card command
+            # and the latest batch has exactly one pending post, bind to that post.
+            if command.args.get("batch_key"):
+                raise
+            approvals = AffiliPilotDB(config.db_path).get_approvals(batch_key)
+            pending = [row for row in approvals if row.get("status") == "pending"]
+            if len(pending) != 1:
+                raise
+            post_id = pending[0]["post_id"]
+            decide_post(config.db_path, batch_key=batch_key, post_id=post_id, decision=decision, reason=reason)
         status_text = render_status(config.db_path, batch_key=batch_key)
         if command.intent == TelegramIntent.APPROVE and config.auto_publish_on_approve:
             if not config.outbox_path:

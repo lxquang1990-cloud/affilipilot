@@ -35,6 +35,12 @@ SAFE_CATEGORY_ALLOWLIST = {
     "computer",
     "phone_accessory",
     "home_living",
+    "home_consumable",
+    "home_organization",
+    "kitchen",
+    "cleaning",
+    "electronics_small",
+    "personal_care",
     "mother_baby",
     "baby_care",
     "toy",
@@ -64,10 +70,12 @@ def normalize_category(product: ProductCandidate) -> str:
         return "home_appliance"
     if any(term in raw for term in ("máy hút bụi", "hút bụi", "máy xay", "nồi chiên", "máy ép", "bếp điện", "bếp từ", "máy lọc", "quạt điện", "quạt tích điện")):
         return "home_appliance"
+    if any(term in raw for term in ("khăn giấy", "giấy ăn", "giấy rút", "nước giặt", "nước rửa chén", "khăn lau", "đồ dùng tiêu hao")):
+        return "home_consumable"
     if any(term in raw for term in ("làm bánh", "bánh cuốn", "hộp cơm", "bình giữ nhiệt", "nắp nồi", "bảo quản thực phẩm", "khăn lau bếp", "nhà bếp", "khuôn làm bánh")):
-        return "home_living"
+        return "kitchen"
     if any(term in raw for term in ("hộp đựng", "kệ để", "giá treo", "tủ đựng", "lưu trữ", "sắp xếp", "gầm giường")):
-        return "storage"
+        return "home_organization"
     if any(token in category for token in ("home", "house", "nha_cua", "đời_sống", "doi_song")):
         return "home_living"
     if any(token in category for token in ("baby", "mother", "me_be", "mẹ_bé", "me-va-be")):

@@ -48,6 +48,26 @@ def test_facebook_plan_blocks_market_fit_before_publish_safe(tmp_path):
     assert plan.publishable_count == 0
     assert any(reason.startswith("market_fit:") for reason in plan.plans[0].reasons)
 
+def test_render_facebook_plan_counts_video_description_text():
+    graph = build_graph_payload(page_id="page", message="Nội dung video hợp lệ", link="https://example.com", video_path="/tmp/product.mp4")
+    plan = type("Plan", (), {
+        "batch_key": "batch",
+        "publishable_count": 1,
+        "blocked_count": 0,
+        "plans": [type("Item", (), {
+            "status": "publishable_dry_run",
+            "post_id": "post_video",
+            "endpoint": graph["endpoint"],
+            "payload_preview": {**graph["payload"], "strategy": graph["strategy"]},
+        })()],
+    })()
+
+    rendered = render_facebook_plan(plan)
+
+    assert "(0 chars)" not in rendered
+    assert "(21 chars)" in rendered
+
+
 def test_publish_text_prefers_manifest_caption_over_stale_post_text(tmp_path):
     stale_file = tmp_path / "stale.post.txt"
     stale_file.write_text("Nội dung cũ chỉ đáng mua nếu nó giải quyết đúng một việc cụ thể.", encoding="utf-8")

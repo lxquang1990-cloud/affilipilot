@@ -297,7 +297,7 @@ def queue_approval_batch(db_path: str | Path, *, batch_key: str, outbox_path: st
                 f"Products considered: {manifest.get('total_products')}",
                 f"Drafts selected: {manifest.get('selected')}",
                 f"Preview file: {preview_path}",
-                "Commands: /aff_approve <post_id>, /aff_reject <post_id>, /aff_edit <post_id>, /aff_blacklist <post_id>",
+                "Commands: /aff_approve <batch_key> <post_id>, /aff_reject <batch_key> <post_id>, /aff_edit <batch_key> <post_id>, /aff_blacklist <batch_key> <post_id>",
             ]),
             attachments=[str(preview_path)] if preview_path.exists() else [],
         )

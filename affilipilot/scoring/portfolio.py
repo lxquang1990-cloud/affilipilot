@@ -4,11 +4,17 @@ from collections import defaultdict
 from typing import Any
 
 CATEGORY_QUOTA = {
+    "home_consumable": 2,
+    "home_organization": 2,
+    "kitchen": 2,
+    "cleaning": 2,
     "home_appliance": 2,
     "home_living": 2,
     "storage": 1,
+    "electronics_small": 1,
     "electronics": 1,
     "phone_accessory": 1,
+    "personal_care": 1,
     "office_productivity": 1,
     "baby_care": 1,
     "mother_baby": 1,
@@ -16,12 +22,18 @@ CATEGORY_QUOTA = {
 }
 
 PREFERRED_ORDER = (
+    "home_consumable",
+    "home_organization",
+    "kitchen",
+    "cleaning",
     "home_appliance",
     "home_living",
     "storage",
     "office_productivity",
+    "electronics_small",
     "electronics",
     "phone_accessory",
+    "personal_care",
     "baby_care",
     "mother_baby",
     "toy",

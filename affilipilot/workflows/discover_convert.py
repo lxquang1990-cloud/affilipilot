@@ -3,11 +3,38 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from types import SimpleNamespace
+
+from affilipilot.marketplaces import classify_url
+from affilipilot.marketplaces.shopee import canonical_product_url
 
 from affilipilot.scanner.browser_exec import browser_render_discover
-from affilipilot.scanner.core import scan_result_to_input_lines
+from affilipilot.scanner.discovery import discover_product_details_from_html
+from affilipilot.scanner.core import ScanResult, fetch_html, resolve_http_url, scan_result_to_input_lines, write_scan_result
 from affilipilot.workflows.accesstrade_links import convert_input_links, write_converted_input
 
+
+
+def _resolve_single_product_shortlink(url: str, *, source: str, category: str, timeout_ms: int) -> tuple[str, ScanResult | None, list[str]]:
+    notes: list[str] = []
+    classification = classify_url(url)
+    if classification.marketplace != "SHOPEE" or classification.kind != "shortlink":
+        return url, None, notes
+    final_url = resolve_http_url(url, timeout=max(5, int(timeout_ms / 1000)))
+    canonical = canonical_product_url(final_url)
+    final_classification = classify_url(canonical)
+    notes.append(f"resolved_shortlink:{url}->{canonical}")
+    if final_classification.kind != "product":
+        return canonical, None, notes
+    try:
+        html_text = fetch_html(canonical, timeout=max(5, int(timeout_ms / 1000)))
+        discovery = discover_product_details_from_html(html_text, page_url=canonical, source=source, category=category, limit=1)
+        if discovery.items:
+            notes.append("resolved_shortlink_pdp_initial_data")
+            return canonical, discovery.to_scan_result(), notes
+    except Exception as exc:  # noqa: BLE001 - fallback to browser discovery below
+        notes.append(f"shortlink_pdp_fetch_fallback:{type(exc).__name__}")
+    return canonical, None, notes
 
 def run_discover_convert(
     *,
@@ -33,16 +60,28 @@ def run_discover_convert(
     converted_json = work_dir / "discovered-products.converted.json"
     converted_input = work_dir / "discovered-products.converted.txt"
 
-    discovery = browser_render_discover(
-        url,
-        out_path=scan_path,
-        source=source,
-        category=category,
-        limit=limit,
-        timeout_ms=timeout_ms,
-        wait_ms=wait_ms,
-        headless=headless,
-    )
+    resolved_url, resolved_scan, resolver_notes = _resolve_single_product_shortlink(url, source=source, category=category, timeout_ms=timeout_ms)
+    if resolved_scan is not None:
+        write_scan_result(resolved_scan, scan_path)
+        discovery = SimpleNamespace(
+            ok=True,
+            total=len(resolved_scan.items),
+            scan_path=str(scan_path),
+            error="",
+            notes=["shortlink_resolved_no_publish"] + resolver_notes,
+        )
+    else:
+        discovery = browser_render_discover(
+            resolved_url,
+            out_path=scan_path,
+            source=source,
+            category=category,
+            limit=limit,
+            timeout_ms=timeout_ms,
+            wait_ms=wait_ms,
+            headless=headless,
+        )
+        discovery.notes.extend(resolver_notes)
     input_lines: list[str] = []
     conversion: dict[str, Any] | None = None
     if discovery.ok and discovery.scan_path:
@@ -57,6 +96,7 @@ def run_discover_convert(
 
     summary = {
         "url": url,
+        "resolved_url": resolved_url,
         "source": source,
         "category": category,
         "campaign_key": campaign_key,

@@ -10,6 +10,7 @@ from affilipilot.links.subid import build_utm, make_tracking_identity
 from affilipilot.media import prepare_product_media, prepare_product_media_gallery
 from affilipilot.scoring.product_score import score_product
 from affilipilot.sources.manual_input import parse_link_lines, parse_products_csv
+from affilipilot.telegram.approval_context import build_approval_context
 from affilipilot.telegram.cards import render_approval_card
 
 
@@ -20,9 +21,9 @@ def load_products(path: str | Path):
     return parse_link_lines(path.read_text(encoding="utf-8"))
 
 
-def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, day: date | None = None) -> dict:
-    # Keep IDs deterministic for tests/demo until real scheduling injects the day.
-    day = day or date(2026, 5, 16)
+def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, day: date | datetime | None = None) -> dict:
+    # Production IDs should be batch-safe. Tests can still pass a fixed date/datetime.
+    day = day or datetime.now(timezone.utc)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -40,13 +41,31 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
         identity = make_tracking_identity(product.title or product.url, index, day=day)
         regenerated = generate_until_content_gate_passes(product)
         draft = regenerated.draft
-        card = render_approval_card(draft, post_id=identity.post_id)
         card_path = out_dir / f"{identity.post_id}.telegram.txt"
         post_path = out_dir / f"{identity.post_id}.post.txt"
         media_dir = out_dir / "media" / identity.post_id
         product_dict = asdict(product)
         gallery_results = prepare_product_media_gallery(product_dict, media_dir)
         media_result = gallery_results[0] if gallery_results else prepare_product_media(product_dict, media_dir)
+        post_for_context = {
+            "product": product_dict,
+            "media": {"local_path": media_result.local_path, "source": product.media_source, "confidence": product.media_confidence},
+            "files": {"image": media_result.local_path if media_result.ok else ""},
+        }
+        content_gate_for_context = {
+            "passed": regenerated.gate.passed and bool(draft.metadata.get("caption_quality_passed", True)),
+            "score": min(regenerated.gate.score, float(draft.metadata.get("caption_quality_score", 100) or 100) / 100),
+            "reasons": regenerated.gate.reasons,
+            "caption_source": draft.metadata.get("caption_source", "unknown"),
+            "ai_reason": draft.metadata.get("ai_reason", ""),
+            "ai_provider": draft.metadata.get("ai_provider", ""),
+            "caption_quality_passed": draft.metadata.get("caption_quality_passed", True),
+            "caption_quality_score": draft.metadata.get("caption_quality_score", 0),
+            "caption_quality_source": draft.metadata.get("caption_quality_source", ""),
+            "caption_quality_reasons": draft.metadata.get("caption_quality_reasons", []),
+        }
+        approval_context = build_approval_context(draft, post=post_for_context, content_gate=content_gate_for_context)
+        card = render_approval_card(draft, post_id=identity.post_id, batch_key=out_dir.parent.name, context=approval_context)
         card_path.write_text(card, encoding="utf-8")
         post_path.write_text(draft.full_text + "\n", encoding="utf-8")
         post = {
@@ -67,6 +86,14 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
                 "regenerated_count": regenerated.regenerated_count,
                 "attempts": [attempt.__dict__ for attempt in regenerated.attempts],
                 "reasons": regenerated.gate.reasons,
+                "caption_source": draft.metadata.get("caption_source", "unknown"),
+                "ai_reason": draft.metadata.get("ai_reason", ""),
+                "ai_provider": draft.metadata.get("ai_provider", ""),
+                "caption_quality_passed": draft.metadata.get("caption_quality_passed", True),
+                "caption_quality_score": draft.metadata.get("caption_quality_score", 0),
+                "caption_quality_source": draft.metadata.get("caption_quality_source", ""),
+                "caption_quality_reasons": draft.metadata.get("caption_quality_reasons", []),
+                "caption_quality_recommendations": draft.metadata.get("caption_quality_recommendations", []),
             },
             "media": {
                 "ok": media_result.ok,

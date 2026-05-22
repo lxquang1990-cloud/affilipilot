@@ -4,12 +4,16 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-MOTHER_BABY_CATEGORIES = {"baby_care", "feeding", "toy", "baby_play", "mother_baby", "home_safety", "storage"}
+MOTHER_BABY_CATEGORIES = {"baby_care", "feeding", "toy", "baby_play", "mother_baby", "home_safety"}
+SMART_SHOPPING_CATEGORIES = {
+    "home_consumable", "home_organization", "kitchen", "cleaning", "home_appliance", "home_living",
+    "storage", "office_productivity", "electronics_small", "phone_accessory", "personal_care",
+    "baby_care", "feeding", "toy", "baby_play", "mother_baby",
+}
 TECH_CATEGORIES = {"electronics", "phone", "smartphone", "laptop", "software"}
 PAGE_AUDIENCE_BY_PAGE_NAME = {
     "itnews vietnam": "tech",
     "itnews": "tech",
-    "nâng niu trái ngọt tình yêu": "mother_baby",
 }
 
 @dataclass
@@ -18,7 +22,7 @@ class PageAudienceFitResult:
     reasons: list[str] = field(default_factory=list)
 
 def configured_page_audience() -> str:
-    return os.environ.get("AFFILIPILOT_PAGE_AUDIENCE", "profit_first").strip().lower() or "profit_first"
+    return os.environ.get("AFFILIPILOT_PAGE_AUDIENCE", os.environ.get("AFFILIPILOT_PAGE_PROFILE", "smart_shopping")).strip().lower() or "smart_shopping"
 
 def audience_from_page_name(page_name: str) -> str:
     normalized = " ".join((page_name or "").strip().lower().split())
@@ -30,9 +34,9 @@ def evaluate_page_audience_fit(product: dict[str, Any], *, page_audience: str | 
     title = str(product.get("title", "")).lower()
     reasons: list[str] = []
 
-    if audience in {"profit_first", "diverse", "general", "multi_niche"}:
-        # Product breadth is allowed; downstream quality/compliance gates still block bad copy/offers.
-        pass
+    if audience in {"smart_shopping", "mua_sam_thong_minh", "profit_first", "diverse", "general", "multi_niche"}:
+        if category not in SMART_SHOPPING_CATEGORIES and category not in {"unknown", "electronics", "phone", "smartphone", "laptop", "computer"}:
+            reasons.append("page_audience_smart_shopping_product_low_fit")
     elif audience in {"mother_baby", "mom_baby", "me_va_be"}:
         if category in TECH_CATEGORIES:
             reasons.append("page_audience_mother_baby_product_tech")

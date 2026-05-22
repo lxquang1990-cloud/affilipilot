@@ -21,7 +21,7 @@ def _price(product: ProductCandidate) -> str:
         return f"{product.price_vnd:,}".replace(",", ".") + "đ"
     return "xem giá hiện tại"
 
-def generate_content_variants(product: ProductCandidate, *, audience: str = "mother_baby") -> list[ContentVariant]:
+def generate_content_variants(product: ProductCandidate, *, audience: str = "smart_shopping") -> list[ContentVariant]:
     name = product.title or "sản phẩm này"
     disclosure = default_affiliate_disclosure()
     category = product.category.lower()
@@ -34,9 +34,9 @@ def generate_content_variants(product: ProductCandidate, *, audience: str = "mot
         ]
     else:
         variants = [
-            ("pain_point", f"Một món nhỏ có thể làm sinh hoạt hằng ngày nhẹ hơn nếu đúng nhu cầu.\n\n{name} phù hợp để tham khảo khi mẹ cần giải quyết đúng vấn đề trong nhà, không mua chỉ vì thấy rẻ. Giá tham khảo: {_price(product)}.\n\n👇 Xem chi tiết ở link bên dưới.\n{disclosure}\n#mevabe #giadinh #muasamthongminh"),
+            ("pain_point", f"Một món nhỏ có thể làm sinh hoạt hằng ngày nhẹ hơn nếu đúng nhu cầu.\n\n{name} phù hợp để tham khảo khi nhà cần giải quyết đúng việc, không mua chỉ vì thấy rẻ. Giá tham khảo: {_price(product)}.\n\n👇 Xem chi tiết ở link bên dưới.\n{disclosure}\n#muasamthongminh #dogiadung #dealhot"),
             ("checklist", f"Trước khi mua {name}, mẹ nên kiểm tra 3 điểm: chất liệu/kích thước, đánh giá người mua, và chính sách đổi trả.\n\nNếu các điểm này ổn và đúng nhu cầu, sản phẩm có thể đáng cân nhắc. Giá tham khảo: {_price(product)}.\n{disclosure}\n#mebim #dodungchobe #muasamthongminh"),
-            ("soft_review", f"Không phải món nào cũng cần mua ngay, nhưng {name} có thể đáng xem nếu nó giải quyết đúng việc mẹ đang vướng.\n\nƯu tiên đọc review thật, xem ảnh người mua và kiểm tra giá hiện tại trước khi quyết định.\n{disclosure}\n#review #mevabe #giadinh"),
+            ("soft_review", f"Không phải món nào cũng cần mua ngay, nhưng {name} có thể đáng xem nếu nó giải quyết đúng việc trong nhà.\n\nƯu tiên đọc review thật, xem ảnh người mua và kiểm tra giá hiện tại trước khi quyết định.\n{disclosure}\n#review #muasamthongminh #dealhot"),
         ]
     output: list[ContentVariant] = []
     product_dict: dict[str, Any] = asdict(product)
@@ -45,5 +45,5 @@ def generate_content_variants(product: ProductCandidate, *, audience: str = "mot
         output.append(ContentVariant(variant_id=f"v{idx}", angle=angle, text=text, score=fit.score, passed=fit.passed, reasons=fit.reasons))
     return sorted(output, key=lambda item: item.score, reverse=True)
 
-def best_variant(product: ProductCandidate, *, audience: str = "mother_baby") -> ContentVariant:
+def best_variant(product: ProductCandidate, *, audience: str = "smart_shopping") -> ContentVariant:
     return generate_content_variants(product, audience=audience)[0]
