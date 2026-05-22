@@ -27,3 +27,18 @@ def test_build_batch_outputs_manifest_and_cards(tmp_path):
     data = json.loads((out_dir / "manifest.json").read_text(encoding="utf-8"))
     assert data["posts"][0]["post_id"] == "post_20260516_001"
     assert data["posts"][0]["compliance"]["status"] == "pass"
+
+def test_build_batch_reuses_conversion_tracking_post_id(tmp_path):
+    input_file = tmp_path / "converted.txt"
+    input_file.write_text(
+        "https://go.isclix.com/deep | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | "
+        "tracking_post_id=post_20260522_1419_gio-sap-xep_001 | tracking_product_id=gio-sap-xep | "
+        "tracking_sub1=facebook | tracking_sub2=smartshopping | tracking_sub3=post_20260522_1419_gio-sap-xep_001 | tracking_sub4=gio-sap-xep\n",
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "out"
+    manifest = build_batch(input_file, out_dir, limit=1, day=date(2026, 5, 16))
+    post = manifest["posts"][0]
+    assert post["post_id"] == "post_20260522_1419_gio-sap-xep_001"
+    assert post["utm"]["utm_content"] == "post_20260522_1419_gio-sap-xep_001"
+    assert post["tracking"]["product_id"] == "gio-sap-xep"

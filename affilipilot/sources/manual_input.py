@@ -44,6 +44,12 @@ def parse_link_lines(text: str) -> list[ProductCandidate]:
             campaign_id=meta.get("campaign_id", ""),
             campaign_key=meta.get("campaign_key", ""),
             link_status=meta.get("link_status", ""),
+            tracking_post_id=meta.get("tracking_post_id", ""),
+            tracking_product_id=meta.get("tracking_product_id", ""),
+            tracking_sub1=meta.get("tracking_sub1", ""),
+            tracking_sub2=meta.get("tracking_sub2", ""),
+            tracking_sub3=meta.get("tracking_sub3", ""),
+            tracking_sub4=meta.get("tracking_sub4", ""),
         ))
     return products
 
@@ -75,5 +81,11 @@ def parse_products_csv(path: str | Path) -> list[ProductCandidate]:
                 campaign_id=row.get("campaign_id", "").strip(),
                 campaign_key=row.get("campaign_key", "").strip(),
                 link_status=row.get("link_status", "").strip(),
+                tracking_post_id=row.get("tracking_post_id", "").strip(),
+                tracking_product_id=row.get("tracking_product_id", "").strip(),
+                tracking_sub1=row.get("tracking_sub1", "").strip(),
+                tracking_sub2=row.get("tracking_sub2", "").strip(),
+                tracking_sub3=row.get("tracking_sub3", "").strip(),
+                tracking_sub4=row.get("tracking_sub4", "").strip(),
             ))
     return products

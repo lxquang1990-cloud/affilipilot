@@ -35,3 +35,11 @@ backups/
 *.bak.*
 *.tmp
 .DS_Store
+data/**/*.lock
+data/ready/
+docs/accesstrade/*.pdf
+docs/accesstrade/*.pptx
+docs/accesstrade/*.csv
+docs/accesstrade/*.txt
+data/outbox/
+data/smoke-debug/

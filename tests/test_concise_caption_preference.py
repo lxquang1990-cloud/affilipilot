@@ -68,3 +68,34 @@ def test_provider_placeholder_is_blocked(monkeypatch):
     result = judge_caption_quality(_product(), text)
     assert result.passed is False
     assert "provider_placeholder_not_resolved" in result.reasons
+
+
+def test_minimal_approval_caption_style_passes(monkeypatch):
+    monkeypatch.setenv("AFFILIPILOT_AI_CAPTION_JUDGE", "false")
+    text = (
+        "Cầu trượt gập gọn giúp bé có góc vận động vui trong nhà, dùng xong cất lại đỡ chiếm chỗ nên hợp với căn hộ nhỏ.\n\n"
+        "Giá tham khảo trên Shopee xem tại link, link affiliate 👇\n"
+        "#chobevui #dodungchobe #muasamthongminh"
+    )
+    product = ProductCandidate(
+        url="https://shopee.vn/product/1/2",
+        title="cầu trượt cho bé trong nhà có thể gập lại",
+        category="unknown",
+        image_url="https://img.example/p.jpg",
+    )
+    result = judge_caption_quality(product, text)
+    assert result.passed is True
+    assert result.score >= 80
+    assert "too_checklist_heavy" not in result.reasons
+
+
+def test_minimal_caption_blocks_warning_checklist(monkeypatch):
+    monkeypatch.setenv("AFFILIPILOT_AI_CAPTION_JUDGE", "false")
+    text = (
+        "Mẫu cầu trượt trong nhà có thể gập lại, hợp với gia đình muốn thêm một món chơi vận động mà không chiếm chỗ cố định. "
+        "Trước khi mua nên xem kỹ kích thước, chất liệu, ảnh thật và luôn để người lớn ở cạnh khi bé chơi.\n\n"
+        "Giá tham khảo trên Shopee xem tại link, link affiliate 👇"
+    )
+    result = judge_caption_quality(ProductCandidate(url="https://shopee.vn/p", title="cầu trượt cho bé", category="unknown"), text)
+    assert result.passed is False
+    assert any(reason in result.reasons for reason in ("too_checklist_heavy", "baby_play_warning_checklist"))

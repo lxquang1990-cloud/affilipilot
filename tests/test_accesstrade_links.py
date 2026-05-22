@@ -128,3 +128,18 @@ def test_convert_blocks_shopee_shortlink_until_resolved(tmp_path):
     assert summary["failed_count"] == 1
     assert summary["items"][0]["preflight"]["classification"]["kind"] == "shortlink"
     assert summary["items"][0]["result"]["error"] == "marketplace_preflight_block:SHOPEE:shortlink"
+
+def test_converted_input_preserves_tracking_identity(tmp_path):
+    f = tmp_path / "links.txt"
+    f.write_text("https://example.com/a?aff=1 | title=Tracking Product | image_url=https://cdn.example/a.jpg", encoding="utf-8")
+    out = tmp_path / "converted.json"
+    summary = convert_input_links(f, out, dry_run=True)
+    item = summary["items"][0]
+    product = item["product"]
+    assert product["tracking_post_id"] == item["tracking_identity"]["post_id"]
+    assert product["tracking_sub3"] == item["utm"]["sub3"]
+
+    converted = write_converted_input(out, tmp_path / "converted.txt")
+    text = converted.read_text(encoding="utf-8")
+    assert "tracking_post_id=" in text
+    assert "tracking_sub3=" in text

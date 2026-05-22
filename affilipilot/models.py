@@ -34,6 +34,12 @@ class ProductCandidate:
     campaign_id: str = ""
     campaign_key: str = ""
     link_status: str = ""
+    tracking_post_id: str = ""
+    tracking_product_id: str = ""
+    tracking_sub1: str = ""
+    tracking_sub2: str = ""
+    tracking_sub3: str = ""
+    tracking_sub4: str = ""
 
 
 @dataclass

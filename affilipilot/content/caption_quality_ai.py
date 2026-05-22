@@ -69,6 +69,10 @@ def _deterministic_caption_quality(product: ProductCandidate, text: str) -> Capt
         score -= 12
         reasons.append("too_checklist_heavy")
         recommendations.append("Remove long checklist wording; keep only one practical note if needed.")
+    if "trước khi mua" in lower or "luôn để người lớn" in lower or "người lớn quan sát" in lower:
+        score -= 35
+        reasons.append("baby_play_warning_checklist")
+        recommendations.append("Remove warning/checklist sentence; keep one concise benefit sentence only.")
     for phrase in ("hiện data", "ưu tiên xem tiếp", "lọc bước đầu", "điểm kiểm chứng hiện có"):
         if phrase in lower:
             score -= 12

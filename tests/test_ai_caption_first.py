@@ -7,14 +7,8 @@ def test_generator_uses_ai_caption_first_when_gate_passes(monkeypatch):
     def fake_ai(product, **kwargs):
         class Result:
             ok = True
-            hook = "AI hook riêng cho kệ bếp gọn nhà."
-            body = (
-                "Phù hợp với nhà cần sắp xếp đồ nhỏ trong bếp cho dễ lấy. "
-                "Lý do đáng xem: kệ giúp gom chai lọ và đồ dùng vào một chỗ, giảm cảnh mặt bếp lộn xộn. "
-                "Điểm kiểm chứng hiện có: giá tham khảo khoảng 199.000đ, có hình sản phẩm để đối chiếu. "
-                "Trước khi chốt, nên kiểm tra: kích thước, tải trọng, chất liệu, cách lắp/treo, ảnh review trong không gian thật. "
-                "Lưu ý: đo kích thước góc định đặt trước khi mua; kiểm tra đánh giá shop, ảnh thật và chính sách đổi trả."
-            )
+            hook = ""
+            body = "Kệ nhỏ giúp gom chai lọ và đồ dùng bếp vào một chỗ, mặt bếp nhìn gọn hơn mà không tốn nhiều diện tích."
         return Result()
 
     monkeypatch.setattr("affilipilot.content.generator.generate_ai_caption", fake_ai)
@@ -26,8 +20,9 @@ def test_generator_uses_ai_caption_first_when_gate_passes(monkeypatch):
         image_url="https://img.example/p.jpg",
     )
     draft = generate_safe_facebook_draft(product)
-    assert draft.hook == "AI hook riêng cho kệ bếp gọn nhà."
-    assert "Lý do đáng xem" in draft.body
+    assert draft.hook == ""
+    assert draft.body == "Kệ nhỏ giúp gom chai lọ và đồ dùng bếp vào một chỗ, mặt bếp nhìn gọn hơn mà không tốn nhiều diện tích."
+    assert "Giá tham khảo trên Shopee 199.000đ, link affiliate 👇" in draft.full_text
 
 
 def test_generator_returns_failed_ai_draft_for_retry_loop(monkeypatch):

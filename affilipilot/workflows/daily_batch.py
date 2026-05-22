@@ -7,6 +7,7 @@ from pathlib import Path
 
 from affilipilot.content.regenerator import generate_until_content_gate_passes
 from affilipilot.links.subid import build_utm, make_tracking_identity
+from affilipilot.models import TrackingIdentity
 from affilipilot.media import prepare_product_media, prepare_product_media_gallery
 from affilipilot.scoring.product_score import score_product
 from affilipilot.sources.manual_input import parse_link_lines, parse_products_csv
@@ -38,7 +39,15 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
     posts = []
     cards = []
     for index, (score, reasons, product) in enumerate(selected, 1):
-        identity = make_tracking_identity(product.title or product.url, index, day=day)
+        if product.tracking_post_id:
+            identity = TrackingIdentity(
+                channel=product.tracking_sub1 or "facebook",
+                property_name=product.tracking_sub2 or "smartshopping",
+                post_id=product.tracking_post_id,
+                product_id=product.tracking_product_id or (product.title or product.url),
+            )
+        else:
+            identity = make_tracking_identity(product.title or product.url, index, day=day)
         regenerated = generate_until_content_gate_passes(product)
         draft = regenerated.draft
         card_path = out_dir / f"{identity.post_id}.telegram.txt"

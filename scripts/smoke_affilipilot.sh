@@ -8,8 +8,8 @@ BATCH_KEY="${AFFILIPILOT_SMOKE_BATCH_KEY:-smoke-happy-path}"
 
 rm -rf "$WORK_DIR" "$DB_PATH"
 FACEBOOK_PAGE_ID="${FACEBOOK_PAGE_ID:-page}" \
-FACEBOOK_PAGE_ACCESS_TOKEN="${FACEBOOK_PAGE_ACCESS_TOKEN:-.placeholder-token}" \
-PYTHONPATH=. python3 -m affilipilot demo-happy-path \
+FACEBOOK_PAGE_ACCESS_TOKEN="${FACEBOOK_PAGE_ACCESS_TOKEN:-token}" \
+PYTHONPATH=. "${PYTHON_BIN:-python3}" -m affilipilot demo-happy-path \
   --work-dir "$WORK_DIR" \
   --db "$DB_PATH" \
   --batch-key "$BATCH_KEY" >/tmp/affilipilot-smoke.out
