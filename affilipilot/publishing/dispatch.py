@@ -5,6 +5,7 @@ from affilipilot.publishing.facebook import (
     publish_multi_photo_post,
     publish_photo_post,
     publish_post,
+    publish_reel_post,
     publish_video_post,
 )
 
@@ -12,8 +13,9 @@ from affilipilot.publishing.facebook import (
 def dispatch_publish_strategy(item: dict, payload: dict) -> dict:
     """Publish a planned Facebook item using its selected strategy."""
     strategy = payload.get("strategy", "")
-    if strategy in {"video_primary", "video_primary_with_image_comment"}:
-        result = publish_video_post(
+    if strategy in {"reel_primary", "video_primary", "video_primary_with_image_comment"}:
+        publisher = publish_reel_post if strategy == "reel_primary" else publish_video_post
+        result = publisher(
             description=payload.get("description", ""),
             video_path=payload.get("local_video_path", ""),
             link=payload.get("url", ""),

@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from affilipilot.db import AffiliPilotDB
+from affilipilot.engagement import approve_comment_reply, ignore_comment, render_comment_action
 from affilipilot.telegram.commands import TelegramIntent, help_text, parse_telegram_text
 from affilipilot.publishing.auto_publish_after_approval import publish_after_approval, render_publish_after_approval
 from affilipilot.publishing.dispatch import dispatch_publish_strategy
@@ -115,6 +116,14 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
         outbox_path = config.outbox_path or (config.work_dir / "outbox.json")
         report = build_doctor_report(db_path=config.db_path, batch_key=batch_key, outbox_path=outbox_path)
         return AdapterResult(command.intent, render_doctor_report(report), [])
+
+    if command.intent == TelegramIntent.AFF_REPLY:
+        result = approve_comment_reply(config.db_path, comment_id=command.args["comment_id"], message=command.args["message"])
+        return AdapterResult(command.intent, render_comment_action(result), [])
+
+    if command.intent == TelegramIntent.AFF_IGNORE:
+        result = ignore_comment(config.db_path, comment_id=command.args["comment_id"])
+        return AdapterResult(command.intent, render_comment_action(result), [])
 
     if command.intent in {TelegramIntent.APPROVE, TelegramIntent.REJECT, TelegramIntent.NEEDS_EDIT, TelegramIntent.BLACKLIST}:
         batch_key = command.args.get("batch_key") or _latest_batch_key(config.db_path)

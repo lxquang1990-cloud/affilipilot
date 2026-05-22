@@ -15,6 +15,8 @@ class TelegramIntent(str, Enum):
     REJECT = "reject"
     NEEDS_EDIT = "needs_edit"
     BLACKLIST = "blacklist"
+    AFF_REPLY = "aff_reply"
+    AFF_IGNORE = "aff_ignore"
     UNKNOWN = "unknown"
 
 
@@ -61,6 +63,10 @@ def parse_telegram_text(text: str) -> ParsedCommand:
         return ParsedCommand(TelegramIntent.NEEDS_EDIT, _decision_args(parts), raw)
     if cmd in {"/aff_blacklist", "/ap_blacklist", "/aff_ban"} and len(parts) >= 2:
         return ParsedCommand(TelegramIntent.BLACKLIST, _decision_args(parts), raw)
+    if cmd == "/aff_reply" and len(parts) >= 3:
+        return ParsedCommand(TelegramIntent.AFF_REPLY, {"comment_id": parts[1], "message": " ".join(parts[2:])}, raw)
+    if cmd == "/aff_ignore" and len(parts) >= 2:
+        return ParsedCommand(TelegramIntent.AFF_IGNORE, {"comment_id": parts[1]}, raw)
     if cmd == "/batch":
         body = raw.split("\n", 1)[1] if "\n" in raw else ""
         return ParsedCommand(TelegramIntent.CREATE_BATCH, {"body": body}, raw)
@@ -84,4 +90,6 @@ def help_text() -> str:
         "/aff_reject <batch_key> <post_id> [reason]",
         "/aff_edit <batch_key> <post_id> [reason]",
         "/aff_blacklist <batch_key> <post_id> [reason]",
+        "/aff_reply <comment_id> <nội dung> — approve and send comment reply",
+        "/aff_ignore <comment_id> — ignore a queued comment",
     ])

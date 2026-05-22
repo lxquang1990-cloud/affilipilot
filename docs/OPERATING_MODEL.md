@@ -414,3 +414,37 @@ text_post  -> blocked for affiliate publishing
 ```
 
 Gate outputs are added to the block reasons or payload warnings. This keeps production publish safe while still allowing fallback planning when media is weak but intentional.
+
+
+## 17. Production Reel upload, insights sync, and comment command handlers
+
+Production publishing still requires the existing Telegram delivery proof and publish-safe gate. When a planned item has `strategy=reel_primary`, the dispatcher now routes it to the Facebook Page Reels endpoint instead of the normal videos endpoint.
+
+```text
+reel_primary -> POST /{page_id}/reels
+video_primary -> POST /{page_id}/videos
+photo_post -> POST /{page_id}/photos or feed multi-photo
+```
+
+Scheduled insights sync is available as a CLI/script foundation:
+
+```bash
+python3 -m affilipilot facebook-insights-sync-scheduled --queue
+scripts/scheduled_facebook_insights_sync.sh
+```
+
+It syncs metrics for `publish_tasks` with `state=published` and a provider post id, writes the social data cube, and queues a Telegram digest. Install the script into cron only after choosing the desired schedule.
+
+Comment handling remains approval-first. Review cards suggest commands; the operator must explicitly run one of:
+
+```text
+/aff_reply <comment_id> <approved reply text>
+/aff_ignore <comment_id>
+```
+
+CLI equivalents exist for ops/testing:
+
+```bash
+python3 -m affilipilot aff-reply --comment-id <id> --message "..."
+python3 -m affilipilot aff-ignore --comment-id <id>
+```

@@ -13,7 +13,7 @@ from typing import Any
 from affilipilot.config import DEFAULT_SECRET_PATH, load_env_file
 from affilipilot.content.ai_caption import generate_ai_caption
 from affilipilot.db import AffiliPilotDB
-from affilipilot.publishing.facebook import FacebookConfig, check_facebook_config
+from affilipilot.publishing.facebook import FacebookConfig, check_facebook_config, reply_to_comment
 from affilipilot.security import redact_for_audit
 from affilipilot.telegram.outbox import Outbox, OutboxMessage
 
@@ -148,6 +148,56 @@ def queue_comment_reply_review(db_path: str | Path, *, outbox_path: str | Path, 
         outbox.add(OutboxMessage(id=f"comment-review-{row['comment_id']}", kind="alert", text=text))
         queued += 1
     return {"queued": queued, "outbox": str(outbox_path)}
+
+def update_comment_status(db_path: str | Path, *, comment_id: str, status: str, reply_text: str = "", raw: dict[str, Any] | None = None) -> dict[str, Any]:
+    if status not in {"new", "queued", "replied", "ignored", "failed"}:
+        raise ValueError(f"Unsupported comment status: {status}")
+    db = AffiliPilotDB(db_path)
+    ensure_engagement_tables(db)
+    now = datetime.now(timezone.utc).isoformat()
+    with db.connect() as conn:
+        row = conn.execute("SELECT * FROM engagement_comments WHERE comment_id = ?", (comment_id,)).fetchone()
+        if not row:
+            raise KeyError(f"Comment not found: {comment_id}")
+        existing_raw = json.loads(row["raw_json"] or "{}")
+        if raw:
+            existing_raw.update(redact_for_audit(raw))
+        if reply_text:
+            existing_raw["approved_reply_text"] = reply_text
+        conn.execute(
+            """
+            UPDATE engagement_comments
+            SET status = ?, raw_json = ?, updated_at = ?
+            WHERE comment_id = ?
+            """,
+            (status, json.dumps(existing_raw, ensure_ascii=False), now, comment_id),
+        )
+        updated = conn.execute("SELECT * FROM engagement_comments WHERE comment_id = ?", (comment_id,)).fetchone()
+    data = dict(updated)
+    data["raw"] = json.loads(data.pop("raw_json") or "{}")
+    return data
+
+def approve_comment_reply(db_path: str | Path, *, comment_id: str, message: str) -> dict[str, Any]:
+    rows = list_comments(db_path, status="")
+    row = next((item for item in rows if item.get("comment_id") == comment_id), None)
+    if not row:
+        raise KeyError(f"Comment not found: {comment_id}")
+    result = reply_to_comment(comment_id=comment_id, message=message)
+    status = "replied" if result.get("ok") else "failed"
+    updated = update_comment_status(db_path, comment_id=comment_id, status=status, reply_text=message, raw={"reply_result": result})
+    return {"ok": bool(result.get("ok")), "status": status, "comment": updated, "result": result}
+
+def ignore_comment(db_path: str | Path, *, comment_id: str) -> dict[str, Any]:
+    updated = update_comment_status(db_path, comment_id=comment_id, status="ignored")
+    return {"ok": True, "status": "ignored", "comment": updated}
+
+def render_comment_action(result: dict[str, Any]) -> str:
+    comment = result.get("comment", {})
+    return "\n".join([
+        f"🐌 AffiliPilot comment action: {result.get('status')}",
+        f"Comment: {comment.get('comment_id', '')}",
+        f"OK: {bool(result.get('ok'))}",
+    ])
 
 def render_comments(rows: list[dict[str, Any]]) -> str:
     lines = ["🐌 AffiliPilot engagement comments"]

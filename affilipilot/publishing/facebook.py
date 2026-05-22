@@ -219,6 +219,53 @@ def publish_video_post(*, description: str, video_path: str, link: str = "", con
     return {**result, "endpoint": f"/{config.page_id}/videos"}
 
 
+def publish_reel_post(*, description: str, video_path: str, link: str = "", config: FacebookConfig | None = None, timeout: int = 180) -> dict[str, Any]:
+    """Publish one local vertical short-form video to Facebook Page Reels.
+
+    Caller must enforce approval/media/affiliate gates before invoking this function.
+    """
+    config = config or FacebookConfig.from_env()
+    health = check_facebook_config(config)
+    if not health.verified:
+        raise RuntimeError("Facebook config is not verified: " + ",".join(health.reasons))
+    path = Path(video_path)
+    if not path.exists():
+        raise RuntimeError("Refusing to publish missing reel video file")
+    if not description.strip():
+        raise RuntimeError("Refusing to publish empty reel description")
+    endpoint = f"https://graph.facebook.com/v19.0/{config.page_id}/reels"
+    caption_link = _caption_link(link)
+    description_text = description + (f"\n\nLink sản phẩm: {caption_link}" if caption_link else "")
+    result = _multipart_post(endpoint, fields={"description": description_text, "access_token": config.page_access_token}, files=[("source", path)], timeout=timeout)
+    return {**result, "endpoint": f"/{config.page_id}/reels"}
+
+def reply_to_comment(*, comment_id: str, message: str, config: FacebookConfig | None = None, timeout: int = 30) -> dict[str, Any]:
+    """Reply to a Facebook comment. Caller must require operator approval."""
+    config = config or FacebookConfig.from_env()
+    health = check_facebook_config(config)
+    if not health.verified:
+        raise RuntimeError("Facebook config is not verified: " + ",".join(health.reasons))
+    if not comment_id.strip():
+        raise RuntimeError("Refusing to reply without comment id")
+    if not message.strip():
+        raise RuntimeError("Refusing to reply with empty message")
+    endpoint = f"https://graph.facebook.com/v19.0/{urllib.parse.quote(comment_id)}/comments"
+    payload = {"message": message.strip(), "access_token": config.page_access_token}
+    data = urllib.parse.urlencode(payload).encode("utf-8")
+    req = urllib.request.Request(endpoint, data=data, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            parsed = json.loads(body) if body else {}
+            return {"ok": 200 <= resp.status < 300, "status": resp.status, "response": redact_for_audit(parsed), "endpoint": f"/{comment_id}/comments"}
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        try:
+            parsed = json.loads(body) if body else {}
+        except json.JSONDecodeError:
+            parsed = {"raw": body[:500]}
+        return {"ok": False, "status": exc.code, "response": redact_for_audit(parsed), "endpoint": f"/{comment_id}/comments"}
+
 def publish_multi_photo_post(*, message: str, image_paths: list[str], link: str = "", config: FacebookConfig | None = None, timeout: int = 90) -> dict[str, Any]:
     """Publish a Facebook feed post with multiple attached photos.
 

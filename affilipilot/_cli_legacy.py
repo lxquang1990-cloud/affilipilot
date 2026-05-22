@@ -12,6 +12,7 @@ from affilipilot.accesstrade.reports import fetch_order_list, render_order_summa
 from affilipilot.analytics.digest import build_daily_digest
 from affilipilot.analytics.performance import PostPerformance, record_performance, render_performance_summary, summarize_performance
 from affilipilot.analytics.roi_digest import build_roi_digest, queue_roi_digest, sync_orders_and_build_roi_digest
+from affilipilot.analytics.insights_sync import queue_insights_sync_digest, render_insights_sync, sync_published_facebook_insights
 from affilipilot.analytics.data_cube import SocialMetric, fetch_facebook_post_metric, latest_social_metrics, render_social_metrics, save_social_metric
 from affilipilot.budget import record_spend
 from affilipilot.config import load_config, render_config_status
@@ -25,7 +26,7 @@ from affilipilot.scoring.confidence import compute_confidence
 from affilipilot.scoring.tier import classify_tier, load_tier_config, render_tier_result
 from affilipilot.analytics.conversions import render_conversion_summary, summarize_conversions, upsert_conversion
 from affilipilot.publishing.dispatch import dispatch_publish_strategy
-from affilipilot.publishing.facebook import check_facebook_config, publish_gallery_comment, publish_multi_photo_post, publish_photo_post, publish_post, publish_video_post
+from affilipilot.publishing.facebook import check_facebook_config, publish_gallery_comment, publish_multi_photo_post, publish_photo_post, publish_post, publish_reel_post, publish_video_post
 from affilipilot.publishing.facebook_plan import plan_facebook_batch, render_facebook_plan
 from affilipilot.publishing.facebook_token import check_facebook_token, render_facebook_token_report
 from affilipilot.publishing.facebook_token_manager import derive_page_token, exchange_short_token, inspect_current_page_token, refresh_from_user_token, render_token_manager_result
@@ -413,6 +414,14 @@ def cmd_facebook_insights_sync(args: argparse.Namespace) -> int:
     print(render_social_metrics(latest_social_metrics(args.db, post_id=metric.post_id)))
     return 0 if not (metric.raw or {}).get("ok") is False else 2
 
+def cmd_facebook_insights_sync_scheduled(args: argparse.Namespace) -> int:
+    summary = sync_published_facebook_insights(args.db, batch_key=args.batch_key, limit=args.limit)
+    print(render_insights_sync(summary, args.db))
+    if args.queue:
+        queued = queue_insights_sync_digest(args.db, outbox_path=args.outbox, summary=summary)
+        print(f"Queued insights digest: {queued['message_id']} -> {queued['outbox']}")
+    return 0 if summary.get("failed", 0) == 0 else 2
+
 def cmd_comment_record(args: argparse.Namespace) -> int:
     suggestion = args.reply_suggestion or (suggest_reply(args.message, product_title=args.product_title) if args.suggest else "")
     save_comment(args.db, CommentRecord(platform=args.platform, post_id=args.post_id, provider_post_id=args.provider_post_id, comment_id=args.comment_id, author=args.author, message=args.message, reply_suggestion=suggestion, raw={"source": "cli"}))
@@ -439,6 +448,18 @@ def cmd_queue_comment_reviews(args: argparse.Namespace) -> int:
     result = queue_comment_reply_review(args.db, outbox_path=args.outbox, post_id=args.post_id, limit=args.limit)
     print(f"Queued comment reviews: {result['queued']} -> {result['outbox']}")
     return 0 if result["queued"] else 2
+
+def cmd_aff_reply(args: argparse.Namespace) -> int:
+    from affilipilot.engagement import approve_comment_reply, render_comment_action
+    result = approve_comment_reply(args.db, comment_id=args.comment_id, message=args.message)
+    print(render_comment_action(result))
+    return 0 if result.get("ok") else 2
+
+def cmd_aff_ignore(args: argparse.Namespace) -> int:
+    from affilipilot.engagement import ignore_comment, render_comment_action
+    result = ignore_comment(args.db, comment_id=args.comment_id)
+    print(render_comment_action(result))
+    return 0
 
 def cmd_handle_text(args: argparse.Namespace) -> int:
     outbox_path = Path(args.outbox) if args.outbox else None
@@ -639,8 +660,9 @@ def cmd_facebook_publish_one(args: argparse.Namespace) -> int:
     if item.get("status") != "publishable_dry_run":
         raise SystemExit(f"Refusing publish; plan status is {item.get('status')}: {item.get('reasons')}")
     payload = item.get("payload_preview", {})
-    if payload.get("strategy") in {"video_primary", "video_primary_with_image_comment"}:
-        result = publish_video_post(description=payload.get("description", ""), video_path=payload.get("local_video_path", ""), link=payload.get("url", ""))
+    if payload.get("strategy") in {"reel_primary", "video_primary", "video_primary_with_image_comment"}:
+        publisher = publish_reel_post if payload.get("strategy") == "reel_primary" else publish_video_post
+        result = publisher(description=payload.get("description", ""), video_path=payload.get("local_video_path", ""), link=payload.get("url", ""))
         if result.get("ok") and payload.get("strategy") == "video_primary_with_image_comment" and payload.get("local_image_paths"):
             target_id = result.get("response", {}).get("post_id") or result.get("response", {}).get("id", "")
             comments = publish_gallery_comment(object_id=target_id, image_paths=payload.get("local_image_paths", []), message="Ảnh thật sản phẩm")
@@ -1221,6 +1243,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--provider-post-id", required=True)
     p.set_defaults(func=cmd_facebook_insights_sync)
 
+    p = sub.add_parser("facebook-insights-sync-scheduled", help="Sync insights for published Facebook tasks and optionally queue Telegram digest")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--batch-key", default="")
+    p.add_argument("--limit", type=int, default=25)
+    p.add_argument("--queue", action="store_true")
+    p.add_argument("--outbox", default="data/outbox/telegram.json")
+    p.set_defaults(func=cmd_facebook_insights_sync_scheduled)
+
     p = sub.add_parser("comment-record", help="Record one engagement comment locally; no external calls")
     p.add_argument("--db", default="data/affilipilot.db")
     p.add_argument("--platform", default="facebook_page")
@@ -1254,6 +1284,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--post-id", default="")
     p.add_argument("--limit", type=int, default=10)
     p.set_defaults(func=cmd_queue_comment_reviews)
+
+    p = sub.add_parser("aff-reply", help="Operator-approved reply to one Facebook comment")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--comment-id", required=True)
+    p.add_argument("--message", required=True)
+    p.set_defaults(func=cmd_aff_reply)
+
+    p = sub.add_parser("aff-ignore", help="Mark one queued Facebook comment ignored")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--comment-id", required=True)
+    p.set_defaults(func=cmd_aff_ignore)
 
     p = sub.add_parser("publish-status", help="Show latest publish lifecycle state for a batch")
     p.add_argument("--db", default="data/affilipilot.db")
