@@ -31,6 +31,7 @@ def render_approval_card(draft: ContentDraft, *, post_id: str = "draft", batch_k
         f"Money score: {context.money_score}/100",
         f"Niche fit: {'PASS' if context.niche_passed else 'BLOCK'} ({context.niche_score}/100)",
         f"Content gate: {'PASS' if context.content_passed else 'UNKNOWN/BLOCK'} ({context.content_score})",
+        f"Publish type: {context.publish_type}/{context.metrics_profile}",
         f"Caption source: {context.caption_source}{(' via ' + context.ai_provider) if context.ai_provider else ''}",
         f"AI/fallback reason: {context.ai_reason or 'none'}",
         f"AI caption quality: {'PASS' if context.caption_quality_passed else 'BLOCK/UNKNOWN'} ({context.caption_quality_score}/100){(' via ' + context.caption_quality_source) if context.caption_quality_source else ''}",

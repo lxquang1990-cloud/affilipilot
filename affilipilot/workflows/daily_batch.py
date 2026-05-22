@@ -9,6 +9,7 @@ from affilipilot.content.regenerator import generate_until_content_gate_passes
 from affilipilot.links.subid import build_utm, make_tracking_identity
 from affilipilot.models import TrackingIdentity
 from affilipilot.media import prepare_product_media, prepare_product_media_gallery
+from affilipilot.publishing.strategy import select_facebook_publish_strategy, strategy_as_dict
 from affilipilot.scoring.product_score import score_product
 from affilipilot.sources.manual_input import parse_link_lines, parse_products_csv
 from affilipilot.telegram.approval_context import build_approval_context
@@ -56,10 +57,15 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
         product_dict = asdict(product)
         gallery_results = prepare_product_media_gallery(product_dict, media_dir)
         media_result = gallery_results[0] if gallery_results else prepare_product_media(product_dict, media_dir)
+        strategy = select_facebook_publish_strategy({"product": product_dict, "files": {"image": media_result.local_path if media_result.ok else product.image_path, "images": [item.local_path for item in gallery_results if item.ok], "video": product.video_path}})
+        draft.metadata.setdefault("publish_type", strategy.publish_type)
+        draft.metadata.setdefault("metrics_profile", strategy.metrics_profile)
+        draft.metadata.setdefault("publish_strategy", strategy_as_dict(strategy))
         post_for_context = {
             "product": product_dict,
             "media": {"local_path": media_result.local_path, "source": product.media_source, "confidence": product.media_confidence},
             "files": {"image": media_result.local_path if media_result.ok else ""},
+            "publish_strategy": strategy_as_dict(strategy),
         }
         content_gate_for_context = {
             "passed": regenerated.gate.passed and bool(draft.metadata.get("caption_quality_passed", True)),
@@ -72,6 +78,8 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
             "caption_quality_score": draft.metadata.get("caption_quality_score", 0),
             "caption_quality_source": draft.metadata.get("caption_quality_source", ""),
             "caption_quality_reasons": draft.metadata.get("caption_quality_reasons", []),
+            "publish_type": draft.metadata.get("publish_type", strategy.publish_type),
+            "metrics_profile": draft.metadata.get("metrics_profile", strategy.metrics_profile),
         }
         approval_context = build_approval_context(draft, post=post_for_context, content_gate=content_gate_for_context)
         card = render_approval_card(draft, post_id=identity.post_id, batch_key=out_dir.parent.name, context=approval_context)
@@ -103,7 +111,11 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
                 "caption_quality_source": draft.metadata.get("caption_quality_source", ""),
                 "caption_quality_reasons": draft.metadata.get("caption_quality_reasons", []),
                 "caption_quality_recommendations": draft.metadata.get("caption_quality_recommendations", []),
+                "publish_type": draft.metadata.get("publish_type", strategy.publish_type),
+                "metrics_profile": draft.metadata.get("metrics_profile", strategy.metrics_profile),
+                "publish_strategy": draft.metadata.get("publish_strategy", strategy_as_dict(strategy)),
             },
+            "publish_strategy": strategy_as_dict(strategy),
             "media": {
                 "ok": media_result.ok,
                 "local_path": media_result.local_path,

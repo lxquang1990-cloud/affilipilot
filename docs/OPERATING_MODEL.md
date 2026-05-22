@@ -375,3 +375,27 @@ video_duration_seconds
 ```
 
 This is still a planning/strategy foundation. Production Reel upload remains a separate implementation step.
+
+
+## 15. Publish-type caption guidance
+
+Caption generation now receives `publish_type` and `metrics_profile` so the same minimal format can adapt to the media context without changing approval safety.
+
+```text
+photo_post -> benefit/situation based on product images
+video_post -> mention demo/cách dùng/chuyển động lightly when useful
+reel       -> faster, punchier one-sentence copy for short vertical video
+link_post  -> clearer reason to click because media is weak
+text_post  -> last-resort concise value sentence
+```
+
+The final rendered caption format is unchanged:
+
+```text
+<1 short AI-generated benefit sentence>
+
+Giá tham khảo trên <Provider> <Giá sản phẩm>, link affiliate 👇
+#chobevui #dodungchobe #muasamthongminh
+```
+
+Approval cards display `Publish type: <publish_type>/<metrics_profile>` so the operator can see how the post is planned before publishing.

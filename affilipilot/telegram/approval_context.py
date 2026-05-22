@@ -27,6 +27,8 @@ class ApprovalContext:
     caption_quality_score: int = 0
     caption_quality_source: str = ""
     caption_quality_reasons: list[str] = field(default_factory=list)
+    publish_type: str = "photo_post"
+    metrics_profile: str = "feed_post"
 
 
 def _top_score_reasons(reasons: list[str], limit: int = 4) -> list[str]:
@@ -83,4 +85,6 @@ def build_approval_context(draft: ContentDraft, *, post: dict[str, Any] | None =
         caption_quality_score=int(gate.get("caption_quality_score", draft.metadata.get("caption_quality_score", 0)) or 0),
         caption_quality_source=str(gate.get("caption_quality_source") or draft.metadata.get("caption_quality_source") or ""),
         caption_quality_reasons=[str(item) for item in (gate.get("caption_quality_reasons") or draft.metadata.get("caption_quality_reasons") or [])],
+        publish_type=str(gate.get("publish_type") or draft.metadata.get("publish_type") or "photo_post"),
+        metrics_profile=str(gate.get("metrics_profile") or draft.metadata.get("metrics_profile") or "feed_post"),
     )

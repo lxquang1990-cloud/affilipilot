@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from affilipilot.content.ai_caption import generate_ai_caption
+from affilipilot.publishing.strategy import select_facebook_publish_strategy, strategy_as_dict
 from affilipilot.content.caption_planner import build_caption_plan, render_caption_body_v2, render_hook_v2
 from affilipilot.content.caption_quality_ai import judge_caption_quality
 from affilipilot.content.compliance import affiliate_cta_disclosure, check_mom_baby_compliance
@@ -331,9 +332,12 @@ def _draft_from_parts(product: ProductCandidate, hook: str, body: str, *, metada
     compliance = check_mom_baby_compliance("\n\n".join([hook, body, cta, disclosure]), category=product.category)
     return ContentDraft(product=product, hook=hook, body=body, cta=cta, disclosure=disclosure, compliance=compliance, metadata=metadata or {})
 
-def generate_safe_facebook_draft(product: ProductCandidate, *, feedback: list[str] | None = None, prefer_ai: bool = True) -> ContentDraft:
+def generate_safe_facebook_draft(product: ProductCandidate, *, feedback: list[str] | None = None, prefer_ai: bool = True, publish_type: str = "", metrics_profile: str = "") -> ContentDraft:
     name = _product_name(product)
     category = product.category.lower()
+    strategy = select_facebook_publish_strategy({"product": product.__dict__, "files": {"image": product.image_path, "images": product.image_urls, "video": product.video_path}})
+    publish_type = publish_type or strategy.publish_type
+    metrics_profile = metrics_profile or strategy.metrics_profile
 
     ai_reason = "ai_not_attempted"
     safety_feedback: list[str] = []
@@ -343,11 +347,11 @@ def generate_safe_facebook_draft(product: ProductCandidate, *, feedback: list[st
         safety_feedback.append("Đồ gia dụng: nhắc bảo hành/review/thông số chính nếu phù hợp, nhưng không viết checklist dài.")
 
     if prefer_ai:
-        ai_feedback = list(feedback or []) + safety_feedback
-        ai = generate_ai_caption(product, feedback=ai_feedback)
+        ai_feedback = list(feedback or []) + safety_feedback + [f"publish_type={publish_type}; metrics_profile={metrics_profile}"]
+        ai = generate_ai_caption(product, feedback=ai_feedback, publish_type=publish_type, metrics_profile=metrics_profile)
         ai_reason = getattr(ai, "reason", "") or ("ai_caption_ok" if ai.ok else "ai_caption_failed")
         if ai.ok:
-            draft = _draft_from_parts(product, ai.hook, ai.body, metadata={"caption_source": "AI", "ai_provider": getattr(ai, "provider", ""), "ai_reason": ai_reason, "ai_feedback": ai_feedback})
+            draft = _draft_from_parts(product, ai.hook, ai.body, metadata={"caption_source": "AI", "ai_provider": getattr(ai, "provider", ""), "ai_reason": ai_reason, "ai_feedback": ai_feedback, "publish_type": publish_type, "metrics_profile": metrics_profile, "publish_strategy": strategy_as_dict(strategy)})
             content_gate = evaluate_content_gates(product.__dict__, draft.full_text)
             quality_judge = judge_caption_quality(product, draft.full_text)
             draft.metadata.update({
@@ -388,4 +392,4 @@ def generate_safe_facebook_draft(product: ProductCandidate, *, feedback: list[st
     else:
         hook, body = _generic_profit_copy(product, name)
 
-    return _draft_from_parts(product, hook, body, metadata={"caption_source": caption_source, "ai_reason": ai_reason})
+    return _draft_from_parts(product, hook, body, metadata={"caption_source": caption_source, "ai_reason": ai_reason, "publish_type": publish_type, "metrics_profile": metrics_profile, "publish_strategy": strategy_as_dict(strategy)})

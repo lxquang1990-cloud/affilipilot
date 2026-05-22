@@ -37,6 +37,16 @@ def ai_caption_enabled() -> bool:
     return value in {"1", "true", "yes", "on", "auto"} and bool(_env("9ROUTER_API_KEY"))
 
 
+def _publish_type_guidance(publish_type: str) -> str:
+    guidance = {
+        "photo_post": "Ảnh sản phẩm là chính: viết benefit cụ thể dựa trên tình huống sử dụng/không gian dùng, không nói như đang review video.",
+        "video_post": "Video sản phẩm là chính: nhắc nhẹ lợi ích nhìn qua demo/cách dùng/chuyển động nếu phù hợp, vẫn chỉ 1 câu ngắn.",
+        "reel": "Reel ngắn: câu phải nhanh, có nhịp, dễ hiểu khi đi cùng video dọc; không mở bài dài, không checklist.",
+        "link_post": "Link post fallback: nêu thật rõ lý do đáng bấm xem vì media yếu, nhưng vẫn không dài quá 1 câu.",
+        "text_post": "Text-only fallback: chỉ dùng khi thiếu media; nêu lợi ích cụ thể và không hype quá.",
+    }
+    return guidance.get((publish_type or "photo_post").strip().lower(), guidance["photo_post"])
+
 def _product_payload(product: ProductCandidate) -> dict[str, Any]:
     return {
         "title": product.title,
@@ -49,13 +59,17 @@ def _product_payload(product: ProductCandidate) -> dict[str, Any]:
     }
 
 
-def build_ai_caption_prompt(product: ProductCandidate, *, feedback: list[str] | None = None) -> str:
+def build_ai_caption_prompt(product: ProductCandidate, *, feedback: list[str] | None = None, publish_type: str = "photo_post", metrics_profile: str = "feed_post") -> str:
     plan = build_caption_plan(product)
+    publish_type = (publish_type or "photo_post").strip().lower()
+    metrics_profile = (metrics_profile or "feed_post").strip().lower()
     return "\n".join([
         "Bạn là copywriter affiliate tiếng Việt cho hệ thống mua sắm thông minh, không neo vào một page/niche cụ thể.",
         "Mục tiêu: viết caption cực ngắn, tự nhiên, cụ thể, không sáo rỗng.",
         "Positioning: Mua sắm thông minh — món nhỏ, tiện, đáng tiền, dễ kiểm chứng.",
         "Format bắt buộc: hook để trống; body chỉ 1 câu duy nhất, khoảng 90-180 ký tự, nêu lợi ích/situation chính của sản phẩm.",
+        f"Publish type: {publish_type}; metrics profile: {metrics_profile}.",
+        "Hướng dẫn theo loại bài: " + _publish_type_guidance(publish_type),
         "Bắt buộc:",
         "- Không bịa claim, không claim y tế/sức khỏe/giảm cân/phát triển trẻ.",
         "- Không dùng hashtag nội bộ như #tiepthilienket #shopeeaffiliate #lazadaaffiliate.",
@@ -117,7 +131,7 @@ def _chat_completions_endpoint(endpoint: str) -> str:
     return urlunparse(parsed._replace(path=path))
 
 
-def generate_ai_caption(product: ProductCandidate, *, feedback: list[str] | None = None, timeout: int = 35) -> AICaptionResult:
+def generate_ai_caption(product: ProductCandidate, *, feedback: list[str] | None = None, timeout: int = 35, publish_type: str = "photo_post", metrics_profile: str = "feed_post") -> AICaptionResult:
     if not ai_caption_enabled():
         return AICaptionResult(False, reason="ai_caption_disabled_or_missing_key")
     api_key = _env("9ROUTER_API_KEY")
@@ -129,7 +143,7 @@ def generate_ai_caption(product: ProductCandidate, *, feedback: list[str] | None
         "max_tokens": 900,
         "messages": [
             {"role": "system", "content": "Bạn chỉ trả về JSON hợp lệ. Không markdown. Key hook phải là chuỗi rỗng; body đúng 1 câu ngắn."},
-            {"role": "user", "content": build_ai_caption_prompt(product, feedback=feedback)},
+            {"role": "user", "content": build_ai_caption_prompt(product, feedback=feedback, publish_type=publish_type, metrics_profile=metrics_profile)},
         ],
     }
     req = urllib.request.Request(
