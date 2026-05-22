@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from affilipilot.video_probe import VideoProbe, probe_video
+
 FACEBOOK_PHOTO_POST = "photo_post"
 FACEBOOK_VIDEO_POST = "video_post"
 FACEBOOK_REEL = "reel"
@@ -17,6 +19,9 @@ class PublishStrategy:
     metrics_profile: str
     reason: str
     endpoint_hint: str = ""
+    video_width: int = 0
+    video_height: int = 0
+    video_duration_seconds: float = 0.0
 
 def _media_files(post: dict[str, Any]) -> tuple[list[str], str]:
     files = post.get("files", {}) or {}
@@ -27,21 +32,26 @@ def _media_files(post: dict[str, Any]) -> tuple[list[str], str]:
     video_path = str(files.get("video", "") or post.get("product", {}).get("video_path", "") or "")
     return images, video_path
 
-def _is_probably_reel(video_path: str, product: dict[str, Any]) -> bool:
-    # Conservative foundation: only select reel when metadata explicitly says so.
-    # Real orientation/duration probing can be added later without changing callers.
+def _explicit_reel_hint(video_path: str, product: dict[str, Any]) -> bool:
     hints = " ".join(str(product.get(key, "")) for key in ("video_kind", "media_kind", "notes", "tags")).lower()
     name = Path(video_path).name.lower()
     return any(token in hints for token in ("reel", "vertical", "short_video")) or "reel" in name
+
+def _probe_for_strategy(video_path: str) -> VideoProbe | None:
+    if not video_path or not Path(video_path).exists():
+        return None
+    result = probe_video(video_path)
+    return result if result.ok else None
 
 def select_facebook_publish_strategy(post: dict[str, Any]) -> PublishStrategy:
     product = post.get("product", {}) or {}
     images, video_path = _media_files(post)
     link = product.get("tracking_url") or product.get("affiliate_url") or product.get("url") or ""
     if video_path:
-        if _is_probably_reel(video_path, product):
-            return PublishStrategy("facebook_page", FACEBOOK_REEL, "reel", "vertical_or_reel_video", endpoint_hint="reels")
-        return PublishStrategy("facebook_page", FACEBOOK_VIDEO_POST, "feed_video", "product_video_ready", endpoint_hint="videos")
+        probe = _probe_for_strategy(video_path)
+        if (probe and probe.is_reel_candidate) or _explicit_reel_hint(video_path, product):
+            return PublishStrategy("facebook_page", FACEBOOK_REEL, "reel", "vertical_or_reel_video", endpoint_hint="reels", video_width=(probe.width if probe else 0), video_height=(probe.height if probe else 0), video_duration_seconds=(probe.duration_seconds if probe else 0.0))
+        return PublishStrategy("facebook_page", FACEBOOK_VIDEO_POST, "feed_video", "product_video_ready", endpoint_hint="videos", video_width=(probe.width if probe else 0), video_height=(probe.height if probe else 0), video_duration_seconds=(probe.duration_seconds if probe else 0.0))
     if images:
         return PublishStrategy("facebook_page", FACEBOOK_PHOTO_POST, "feed_post", "product_images_ready", endpoint_hint="photos")
     if link:

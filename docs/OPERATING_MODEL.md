@@ -352,3 +352,26 @@ No image-only publish when product video should be used but is not ready.
 Cron must always notify.
 Tracking identity must survive conversion -> publish -> ROI.
 ```
+
+
+## 14. Video probing for publish strategy
+
+AffiliPilot uses `ffprobe` when available to inspect local product videos before selecting Facebook publish type.
+
+Rules:
+
+```text
+vertical video + duration <= 90s -> facebook_page.reel / metrics_profile=reel
+other valid local video          -> facebook_page.video_post / metrics_profile=feed_video
+explicit metadata hint           -> can still mark as reel when probing is unavailable
+```
+
+Probe fields captured in strategy payload when available:
+
+```text
+video_width
+video_height
+video_duration_seconds
+```
+
+This is still a planning/strategy foundation. Production Reel upload remains a separate implementation step.
