@@ -1,5 +1,38 @@
 # CHANGELOG
 
+## 0.4.0 — Revenue loop, publish types, Reels, and engagement ops (May 2026)
+
+### Added
+- Shopee shortlink support and canonicalization for links such as `s.shopee.vn`, including rendered PDP data extraction fallback.
+- Minimal AI-first caption policy: one AI-generated benefit sentence, fixed price/link CTA, and hashtags; no deterministic long repair fallback for approval captions.
+- Tracking identity preservation from Accesstrade conversion through draft/publish IDs (`tracking_post_id`, `tracking_product_id`, `tracking_sub1..4`) so ROI attribution can join on `utm_content/post_id`.
+- ROI digest MVP joining published post mappings with Accesstrade orders/conversions; supports `roi-digest`, `--sync`, `--dry-run`, and `--queue` without auto-publish.
+- Publish lifecycle model and task table with states from draft creation through approval, planning, publish, hidden/deleted/failed/held.
+- Platform restriction registry for Facebook Page publish types: `photo_post`, `video_post`, `reel`, `link_post`, and `text_post`.
+- Social metrics/data cube foundation with `publish_type` and `metrics_profile` separation for feed posts, videos, and Reels.
+- Engagement/comment workflow: comment capture, AI reply suggestion, Telegram review queue, and operator-approved `/aff_reply` / `/aff_ignore` command handling.
+- Facebook publish strategy selector with video probing via `ffprobe`; vertical short local videos can plan as Reels, other videos as video posts.
+- Publish-type-aware caption guidance so AI prompt knows whether the plan is photo/video/Reel/link/text while preserving the minimal rendered caption format.
+- Publish-type media/restriction gate: photo requires image, video requires local video, Reel requires valid vertical short video, link post is weak-media fallback, text post blocks affiliate publishing.
+- Production Reel dispatch path (`reel_primary -> /{page_id}/reels`) behind existing Telegram delivery proof, approval, dry-run, media gate, and publish-safe validation.
+- Scheduled Facebook insights sync foundation (`facebook-insights-sync-scheduled` and `scripts/scheduled_facebook_insights_sync.sh`) with Telegram digest queueing.
+- Durable operating model documentation in `docs/OPERATING_MODEL.md`.
+
+### Changed
+- Scheduled AffiliPilot cron wrapper always notifies Telegram: approval card if posts are ready, digest/status if zero posts are publish-ready.
+- Caption safety rules now act as AI prompt feedback/guardrails instead of bypassing AI with deterministic templates.
+- Facebook planning now records and renders `publish_type` / `metrics_profile` through approval cards, lifecycle, dry-run payload, and data cube.
+- Comment reply workflow remains approval-first: AI may suggest, but only explicit operator command sends a reply.
+
+### Fixed
+- Cron PATH issue that prevented scheduled Telegram delivery from finding `openclaw` under minimal cron environment.
+- Shopee product/media extraction false positives and shortlink flows that previously required full product URLs.
+- Warning/checklist caption phrases for baby/play products that conflicted with the concise caption policy.
+
+### Verification
+- Focused compile, pytest, smoke, doctor, and diff-check passes across the new release branches.
+- Latest pushed feature commits included: `8f87fd4`, `4d8f3ec`, `8247bde`, `4e36f90`, `ff4a0fa`, `20b9cd9`, `06a66f7`, `0c7df49`, `3556a92`.
+
 ## 0.3.0 — Automation-first content/media pipeline (May 2026)
 
 ### Added
