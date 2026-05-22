@@ -95,3 +95,30 @@ def test_score_product_accepts_feedback_category_bonus(monkeypatch):
     boosted = score_product(product)
     assert boosted["score"] >= base["score"]
     assert "performance_feedback_category:storage+6" in boosted["reasons"]
+from affilipilot.analytics.roi_digest import build_roi_digest, queue_roi_digest, sync_orders_and_build_roi_digest
+
+
+def test_roi_digest_renders_and_queues_even_with_zero_orders(tmp_path):
+    db = tmp_path / "affilipilot.db"
+    _save_batch(db)
+    record_publish_event(db, batch_key="batch", post_id="post_20260521_1000_ke-bep_001", state="published", facebook_post_id="fb_1")
+    digest = build_roi_digest(db, batch_key="batch", label="Test day")
+    assert "AffiliPilot ROI digest" in digest["text"]
+    assert "Published: 1" in digest["text"]
+    assert "Commission: 0đ" in digest["text"]
+
+    outbox = tmp_path / "outbox.json"
+    queued = queue_roi_digest(db, outbox_path=outbox, batch_key="batch", label="Test day")
+    assert queued["message_id"].startswith("roi-digest-")
+    assert "Published: 1" in outbox.read_text(encoding="utf-8")
+
+
+def test_roi_sync_dry_run_does_not_call_accesstrade_and_builds_digest(tmp_path):
+    db = tmp_path / "affilipilot.db"
+    _save_batch(db)
+    record_publish_event(db, batch_key="batch", post_id="post_20260521_1000_ke-bep_001", state="published", facebook_post_id="fb_1")
+    result = sync_orders_and_build_roi_digest(db, batch_key="batch", label="Dry", dry_run=True)
+    assert result["ok"] is True
+    assert result["dry_run"] is True
+    assert result["fetched"] == 0
+    assert "Published: 1" in result["digest"]["text"]

@@ -11,6 +11,7 @@ from affilipilot.accesstrade.deals import fetch_coupons, fetch_offer_keywords, f
 from affilipilot.accesstrade.reports import fetch_order_list, render_order_summary, save_orders, summarize_orders, write_json as write_report_json
 from affilipilot.analytics.digest import build_daily_digest
 from affilipilot.analytics.performance import PostPerformance, record_performance, render_performance_summary, summarize_performance
+from affilipilot.analytics.roi_digest import build_roi_digest, queue_roi_digest, sync_orders_and_build_roi_digest
 from affilipilot.budget import record_spend
 from affilipilot.config import load_config, render_config_status
 from affilipilot.content.market_fit import evaluate_market_fit, render_market_fit
@@ -766,6 +767,39 @@ def cmd_accesstrade_report(args: argparse.Namespace) -> int:
         print(f"Output JSON: {args.out}")
     return 0
 
+def cmd_roi_digest(args: argparse.Namespace) -> int:
+    if args.sync:
+        result = sync_orders_and_build_roi_digest(
+            args.db,
+            since=args.since or None,
+            until=args.until or None,
+            merchant=args.merchant,
+            status=args.status,
+            batch_key=args.batch_key,
+            label=args.label,
+            outbox_path=args.outbox if args.queue else "",
+            dry_run=args.dry_run,
+        )
+        print(f"Accesstrade sync: ok={result['ok']} fetched={result['fetched']} saved={result['saved']} dry_run={result['dry_run']}")
+        if result.get("error"):
+            print(f"Error: {result['error']}")
+        print(result["digest"]["text"])
+        if args.out:
+            write_report_json(args.out, result)
+            print(f"Output JSON: {args.out}")
+        if result.get("queued"):
+            print(f"Queued ROI digest: {result['queued']['message_id']} -> {result['queued']['outbox']}")
+        return 0 if result["ok"] else 2
+    digest = build_roi_digest(args.db, batch_key=args.batch_key, label=args.label)
+    print(digest["text"])
+    if args.out:
+        write_report_json(args.out, digest)
+        print(f"Output JSON: {args.out}")
+    if args.queue:
+        queued = queue_roi_digest(args.db, outbox_path=args.outbox, batch_key=args.batch_key, label=args.label)
+        print(f"Queued ROI digest: {queued['message_id']} -> {queued['outbox']}")
+    return 0
+
 def cmd_accesstrade_convert(args: argparse.Namespace) -> int:
     summary = convert_input_links(args.input, args.out, dry_run=args.dry_run, limit=args.limit, campaign_key=args.campaign_key, allow_channel_urls=args.allow_channel_urls)
     print(f"Accesstrade convert: ok={summary['ok_count']} failed={summary['failed_count']} dry_run={summary['dry_run']}")
@@ -1438,6 +1472,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--db", default="data/affilipilot.db")
     p.add_argument("--out", default="")
     p.set_defaults(func=cmd_accesstrade_report)
+
+    p = sub.add_parser("roi-digest", help="Build/queue ROI digest from published posts and Accesstrade orders; no publish")
+    p.add_argument("--db", default="data/affilipilot.db")
+    p.add_argument("--batch-key", default="")
+    p.add_argument("--label", default="Hôm nay")
+    p.add_argument("--out", default="")
+    p.add_argument("--queue", action="store_true", help="Queue digest into Telegram outbox without sending")
+    p.add_argument("--outbox", default="data/outbox/telegram.json")
+    p.add_argument("--sync", action="store_true", help="Fetch Accesstrade orders before building digest")
+    p.add_argument("--dry-run", action="store_true", help="With --sync, do not call Accesstrade; use local DB only")
+    p.add_argument("--since", default="")
+    p.add_argument("--until", default="")
+    p.add_argument("--merchant", default="")
+    p.add_argument("--status", default="")
+    p.set_defaults(func=cmd_roi_digest)
 
     p = sub.add_parser("accesstrade-convert", help="Convert product URLs to Accesstrade tracking links; dry-run by default")
     p.add_argument("--input", required=True)
