@@ -399,3 +399,18 @@ Giá tham khảo trên <Provider> <Giá sản phẩm>, link affiliate 👇
 ```
 
 Approval cards display `Publish type: <publish_type>/<metrics_profile>` so the operator can see how the post is planned before publishing.
+
+
+## 16. Publish-type media/restriction gate
+
+Facebook dry-run planning now validates media against the selected publish type before a post can become `publishable_dry_run`.
+
+```text
+photo_post -> requires 1-10 valid product images
+video_post -> requires valid local video; ffprobe warnings do not block if file validation passes
+reel       -> requires valid local video, vertical orientation, and duration within Reel limit
+link_post  -> allowed fallback with weak-media warning when a link exists
+text_post  -> blocked for affiliate publishing
+```
+
+Gate outputs are added to the block reasons or payload warnings. This keeps production publish safe while still allowing fallback planning when media is weak but intentional.

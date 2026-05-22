@@ -14,6 +14,7 @@ from affilipilot.publishing.facebook import FacebookConfig, check_facebook_confi
 from affilipilot.links.shortlink import visible_link_for_post
 from affilipilot.publishing.gate import evaluate_publish_gate
 from affilipilot.publishing.lifecycle import record_publish_event
+from affilipilot.publishing.media_gate import evaluate_publish_media_gate
 from affilipilot.publishing.restrictions import get_platform_restriction
 from affilipilot.publishing.strategy import PublishStrategy, select_facebook_publish_strategy, strategy_as_dict
 from affilipilot.quality import evaluate_quality_gate
@@ -138,18 +139,20 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
             reasons.append("video_available_but_not_publish_ready")
         if video_path and not Path(video_path).exists():
             reasons.append("video_path_not_found")
+        media_gate = evaluate_publish_media_gate(post, strategy=strategy, restriction=restrictions)
+        reasons.extend(reason for reason in media_gate.reasons if reason not in reasons)
 
-        if gate.allowed and quality.passed and market_fit.passed and page_fit.passed and offer.passed and "duplicate_text" not in reasons and "caption_too_long_for_facebook" not in reasons and "missing_real_short_link" not in reasons and "video_available_but_not_publish_ready" not in reasons and "video_path_not_found" not in reasons:
+        if gate.allowed and quality.passed and market_fit.passed and page_fit.passed and offer.passed and media_gate.passed and "duplicate_text" not in reasons and "caption_too_long_for_facebook" not in reasons and "missing_real_short_link" not in reasons and "video_available_but_not_publish_ready" not in reasons and "video_path_not_found" not in reasons:
             graph = build_graph_payload(page_id=config.page_id, message=text, link=_post_link(post), image_path=files.get("image", ""), image_paths=files.get("images", [])[:restrictions.image_max_count], video_path=video_path, publish_type=strategy.publish_type)
             plans.append(FacebookPostPlan(
                 post_id=post_id,
                 status="publishable_dry_run",
                 endpoint=graph["endpoint"],
-                payload_preview={**graph["payload"], "strategy": graph["strategy"], "publish_type": strategy.publish_type, "metrics_profile": strategy.metrics_profile},
+                payload_preview={**graph["payload"], "strategy": graph["strategy"], "publish_type": strategy.publish_type, "metrics_profile": strategy.metrics_profile, "media_warnings": media_gate.warnings},
                 publish_type=strategy.publish_type,
                 metrics_profile=strategy.metrics_profile,
             ))
-            record_publish_event(db_path, batch_key=batch_key, post_id=post_id, state="planned", reason="facebook_dry_run_plan", payload={"endpoint": graph["endpoint"], "strategy": graph["strategy"], **strategy_as_dict(strategy)})
+            record_publish_event(db_path, batch_key=batch_key, post_id=post_id, state="planned", reason="facebook_dry_run_plan", payload={"endpoint": graph["endpoint"], "strategy": graph["strategy"], "media_warnings": media_gate.warnings, **strategy_as_dict(strategy)})
         else:
             plans.append(FacebookPostPlan(
                 post_id=post_id,
@@ -158,7 +161,7 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
                 publish_type=strategy.publish_type,
                 metrics_profile=strategy.metrics_profile,
             ))
-            record_publish_event(db_path, batch_key=batch_key, post_id=post_id, state="held", reason=",".join(reasons or ["not_publishable"]), payload={"reasons": reasons or ["not_publishable"], **strategy_as_dict(strategy)})
+            record_publish_event(db_path, batch_key=batch_key, post_id=post_id, state="held", reason=",".join(reasons or ["not_publishable"]), payload={"reasons": reasons or ["not_publishable"], "media_warnings": media_gate.warnings, **strategy_as_dict(strategy)})
 
     result = FacebookBatchPlan(
         batch_key=batch_key,
