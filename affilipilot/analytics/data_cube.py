@@ -36,6 +36,8 @@ def ensure_social_metrics_table(db: AffiliPilotDB) -> None:
                 platform TEXT NOT NULL,
                 post_id TEXT NOT NULL,
                 provider_post_id TEXT NOT NULL DEFAULT '',
+                publish_type TEXT NOT NULL DEFAULT 'photo_post',
+                metrics_profile TEXT NOT NULL DEFAULT 'feed_post',
                 impressions INTEGER NOT NULL DEFAULT 0,
                 reach INTEGER NOT NULL DEFAULT 0,
                 clicks INTEGER NOT NULL DEFAULT 0,
@@ -48,6 +50,13 @@ def ensure_social_metrics_table(db: AffiliPilotDB) -> None:
             )
             """
         )
+        for column, ddl in (
+            ("publish_type", "ALTER TABLE social_metrics ADD COLUMN publish_type TEXT NOT NULL DEFAULT 'photo_post'"),
+            ("metrics_profile", "ALTER TABLE social_metrics ADD COLUMN metrics_profile TEXT NOT NULL DEFAULT 'feed_post'"),
+        ):
+            existing = {row[1] for row in conn.execute("PRAGMA table_info(social_metrics)").fetchall()}
+            if column not in existing:
+                conn.execute(ddl)
 
 def save_social_metric(db_path: str | Path, metric: SocialMetric) -> None:
     db = AffiliPilotDB(db_path)
@@ -55,13 +64,15 @@ def save_social_metric(db_path: str | Path, metric: SocialMetric) -> None:
     with db.connect() as conn:
         conn.execute(
             """
-            INSERT INTO social_metrics(platform, post_id, provider_post_id, impressions, reach, clicks, reactions, comments, shares, raw_json, captured_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO social_metrics(platform, post_id, provider_post_id, publish_type, metrics_profile, impressions, reach, clicks, reactions, comments, shares, raw_json, captured_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 metric.platform,
                 metric.post_id,
                 metric.provider_post_id,
+                str((metric.raw or {}).get("publish_type") or "photo_post"),
+                str((metric.raw or {}).get("metrics_profile") or "feed_post"),
                 metric.impressions,
                 metric.reach,
                 metric.clicks,
@@ -148,6 +159,6 @@ def render_social_metrics(rows: list[dict[str, Any]]) -> str:
         return "\n".join(lines)
     for row in rows:
         lines.append(
-            f"- {row['post_id']} [{row['platform']}]: impressions={row['impressions']} reach={row['reach']} clicks={row['clicks']} comments={row['comments']} shares={row['shares']} captured={row['captured_at']}"
+            f"- {row['post_id']} [{row['platform']}.{row.get('publish_type', 'photo_post')}/{row.get('metrics_profile', 'feed_post')}]: impressions={row['impressions']} reach={row['reach']} clicks={row['clicks']} comments={row['comments']} shares={row['shares']} captured={row['captured_at']}"
         )
     return "\n".join(lines)

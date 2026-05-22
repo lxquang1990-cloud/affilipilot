@@ -1,5 +1,6 @@
 from affilipilot.publishing.facebook import FacebookConfig
 from affilipilot.publishing.facebook_plan import build_graph_payload, plan_facebook_batch, render_facebook_plan, _publish_text
+from affilipilot.publishing.strategy import select_facebook_publish_strategy
 from affilipilot.workflows.approval import create_approval_batch, decide_post
 
 
@@ -32,6 +33,8 @@ def test_facebook_plan_publishable_after_approval(tmp_path):
     rendered = render_facebook_plan(plan)
     assert plan.publishable_count == 1
     assert plan.plans[0].endpoint == "/page/photos"
+    assert plan.plans[0].publish_type == "photo_post"
+    assert plan.plans[0].metrics_profile == "feed_post"
     assert "would POST" in rendered
     assert (tmp_path / "plan.json").exists()
 
@@ -66,6 +69,17 @@ def test_render_facebook_plan_counts_video_description_text():
 
     assert "(0 chars)" not in rendered
     assert "(21 chars)" in rendered
+
+
+def test_select_facebook_publish_strategy_types(tmp_path):
+    image = tmp_path / "p.jpg"
+    image.write_bytes(b"img")
+    video = tmp_path / "demo.mp4"
+    video.write_bytes(b"video")
+    assert select_facebook_publish_strategy({"files": {"image": str(image)}, "product": {"url": "https://example.com"}}).publish_type == "photo_post"
+    assert select_facebook_publish_strategy({"files": {"video": str(video)}, "product": {"url": "https://example.com"}}).publish_type == "video_post"
+    assert select_facebook_publish_strategy({"files": {"video": str(video)}, "product": {"url": "https://example.com", "video_kind": "vertical reel"}}).publish_type == "reel"
+    assert select_facebook_publish_strategy({"files": {}, "product": {"url": "https://example.com"}}).publish_type == "link_post"
 
 
 def test_publish_text_prefers_manifest_caption_over_stale_post_text(tmp_path):

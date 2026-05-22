@@ -36,6 +36,8 @@ def ensure_publish_events_table(db: AffiliPilotDB) -> None:
                 post_id TEXT NOT NULL,
                 flow_id TEXT NOT NULL DEFAULT '',
                 platform TEXT NOT NULL DEFAULT 'facebook_page',
+                publish_type TEXT NOT NULL DEFAULT 'photo_post',
+                metrics_profile TEXT NOT NULL DEFAULT 'feed_post',
                 state TEXT NOT NULL,
                 provider_post_id TEXT NOT NULL DEFAULT '',
                 work_link TEXT NOT NULL DEFAULT '',
@@ -47,6 +49,13 @@ def ensure_publish_events_table(db: AffiliPilotDB) -> None:
             )
             """
         )
+        for column, ddl in (
+            ("publish_type", "ALTER TABLE publish_tasks ADD COLUMN publish_type TEXT NOT NULL DEFAULT 'photo_post'"),
+            ("metrics_profile", "ALTER TABLE publish_tasks ADD COLUMN metrics_profile TEXT NOT NULL DEFAULT 'feed_post'"),
+        ):
+            existing = {row[1] for row in conn.execute("PRAGMA table_info(publish_tasks)").fetchall()}
+            if column not in existing:
+                conn.execute(ddl)
 
 def upsert_publish_task(
     db_path: str | Path,
@@ -55,6 +64,8 @@ def upsert_publish_task(
     post_id: str,
     state: str,
     platform: str = "facebook_page",
+    publish_type: str = "photo_post",
+    metrics_profile: str = "feed_post",
     flow_id: str = "",
     provider_post_id: str = "",
     work_link: str = "",
@@ -69,10 +80,12 @@ def upsert_publish_task(
     with db.connect() as conn:
         conn.execute(
             """
-            INSERT INTO publish_tasks(batch_key, post_id, flow_id, platform, state, provider_post_id, work_link, error_msg, payload_json, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO publish_tasks(batch_key, post_id, flow_id, platform, publish_type, metrics_profile, state, provider_post_id, work_link, error_msg, payload_json, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(batch_key, post_id, platform) DO UPDATE SET
               flow_id=CASE WHEN excluded.flow_id != '' THEN excluded.flow_id ELSE publish_tasks.flow_id END,
+              publish_type=excluded.publish_type,
+              metrics_profile=excluded.metrics_profile,
               state=excluded.state,
               provider_post_id=CASE WHEN excluded.provider_post_id != '' THEN excluded.provider_post_id ELSE publish_tasks.provider_post_id END,
               work_link=CASE WHEN excluded.work_link != '' THEN excluded.work_link ELSE publish_tasks.work_link END,
@@ -80,7 +93,7 @@ def upsert_publish_task(
               payload_json=excluded.payload_json,
               updated_at=excluded.updated_at
             """,
-            (batch_key, post_id, flow_id, platform, state, provider_post_id, work_link, error_msg, json.dumps(payload or {}, ensure_ascii=False), now, now),
+            (batch_key, post_id, flow_id, platform, publish_type, metrics_profile, state, provider_post_id, work_link, error_msg, json.dumps(payload or {}, ensure_ascii=False), now, now),
         )
 
 def record_publish_event(db_path: str | Path, *, batch_key: str, post_id: str, state: str, facebook_post_id: str = "", reason: str = "", payload: dict[str, Any] | None = None) -> None:
@@ -98,7 +111,18 @@ def record_publish_event(db_path: str | Path, *, batch_key: str, post_id: str, s
             """,
             (batch_key, post_id, state, facebook_post_id, reason, json.dumps(payload or {}, ensure_ascii=False), now),
         )
-    upsert_publish_task(db_path, batch_key=batch_key, post_id=post_id, state=state, provider_post_id=facebook_post_id, error_msg=reason if state == "failed" else "", payload=payload)
+    payload = payload or {}
+    upsert_publish_task(
+        db_path,
+        batch_key=batch_key,
+        post_id=post_id,
+        state=state,
+        provider_post_id=facebook_post_id,
+        error_msg=reason if state == "failed" else "",
+        payload=payload,
+        publish_type=str(payload.get("publish_type") or "photo_post"),
+        metrics_profile=str(payload.get("metrics_profile") or "feed_post"),
+    )
 
 def latest_publish_events(db_path: str | Path, *, batch_key: str) -> dict[str, dict[str, Any]]:
     db = AffiliPilotDB(db_path)
@@ -163,5 +187,5 @@ def render_publish_tasks(db_path: str | Path, *, batch_key: str = "", post_id: s
     for row in rows:
         provider = f" provider_id={row['provider_post_id']}" if row.get("provider_post_id") else ""
         err = f" error={row['error_msg']}" if row.get("error_msg") else ""
-        lines.append(f"- {row['post_id']} [{row['platform']}]: {row['state']}{provider}{err} updated={row['updated_at']}")
+        lines.append(f"- {row['post_id']} [{row['platform']}.{row.get('publish_type', 'photo_post')}/{row.get('metrics_profile', 'feed_post')}]: {row['state']}{provider}{err} updated={row['updated_at']}")
     return "\n".join(lines)

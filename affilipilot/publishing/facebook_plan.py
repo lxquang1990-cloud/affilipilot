@@ -15,6 +15,7 @@ from affilipilot.links.shortlink import visible_link_for_post
 from affilipilot.publishing.gate import evaluate_publish_gate
 from affilipilot.publishing.lifecycle import record_publish_event
 from affilipilot.publishing.restrictions import get_platform_restriction
+from affilipilot.publishing.strategy import PublishStrategy, select_facebook_publish_strategy, strategy_as_dict
 from affilipilot.quality import evaluate_quality_gate
 
 
@@ -25,6 +26,8 @@ class FacebookPostPlan:
     reasons: list[str] = field(default_factory=list)
     endpoint: str = ""
     payload_preview: dict[str, Any] = field(default_factory=dict)
+    publish_type: str = "photo_post"
+    metrics_profile: str = "feed_post"
     dry_run_only: bool = True
 
 
@@ -37,7 +40,7 @@ class FacebookBatchPlan:
     dry_run_only: bool = True
 
 
-def build_graph_payload(*, page_id: str, message: str, link: str = "", image_path: str = "", image_paths: list[str] | None = None, video_path: str = "") -> dict[str, Any]:
+def build_graph_payload(*, page_id: str, message: str, link: str = "", image_path: str = "", image_paths: list[str] | None = None, video_path: str = "", publish_type: str = "") -> dict[str, Any]:
     image_paths = [path for path in (image_paths or []) if path]
     payload = {"message": message}
     if link:
@@ -45,9 +48,9 @@ def build_graph_payload(*, page_id: str, message: str, link: str = "", image_pat
     endpoint = f"/{page_id}/feed"
     strategy = "feed"
     if video_path:
-        endpoint = f"/{page_id}/videos"
+        endpoint = f"/{page_id}/reels" if publish_type == "reel" else f"/{page_id}/videos"
         payload = {"description": message, "url": link, "local_video_path": video_path, "local_image_paths": image_paths[:4]}
-        strategy = "video_primary_with_image_comment" if image_paths else "video_primary"
+        strategy = "reel_primary" if publish_type == "reel" else ("video_primary_with_image_comment" if image_paths else "video_primary")
     elif len(image_paths) >= 2:
         endpoint = f"/{page_id}/feed"
         payload = {"message": message, "url": link, "local_image_paths": image_paths[:4]}
@@ -88,7 +91,6 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
     manifest = batch["manifest"]
     config = config or FacebookConfig.from_env()
     health = check_facebook_config(config)
-    restrictions = get_platform_restriction("facebook_page")
 
     plans: list[FacebookPostPlan] = []
     seen_texts: set[str] = set()
@@ -121,13 +123,15 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
         reasons.extend(f"market_fit:{reason}" for reason in market_fit.reasons if f"market_fit:{reason}" not in reasons)
         reasons.extend(f"page_audience_fit:{reason}" for reason in page_fit.reasons if f"page_audience_fit:{reason}" not in reasons)
         reasons.extend(f"offer:{reason}" for reason in offer.reasons if f"offer:{reason}" not in reasons)
+
+        files = post.get("files", {})
+        strategy = select_facebook_publish_strategy(post)
+        restrictions = get_platform_restriction(strategy.platform, publish_type=strategy.publish_type)
         if len(text) > restrictions.caption_max_chars:
             reasons.append("caption_too_long_for_facebook")
         if text in seen_texts and text:
             reasons.append("duplicate_text")
         seen_texts.add(text)
-
-        files = post.get("files", {})
         video_available = bool(product.get("video_url") or product.get("video_urls"))
         video_path = files.get("video", "") or product.get("video_path", "")
         if video_available and not video_path:
@@ -136,21 +140,25 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
             reasons.append("video_path_not_found")
 
         if gate.allowed and quality.passed and market_fit.passed and page_fit.passed and offer.passed and "duplicate_text" not in reasons and "caption_too_long_for_facebook" not in reasons and "missing_real_short_link" not in reasons and "video_available_but_not_publish_ready" not in reasons and "video_path_not_found" not in reasons:
-            graph = build_graph_payload(page_id=config.page_id, message=text, link=_post_link(post), image_path=files.get("image", ""), image_paths=files.get("images", [])[:restrictions.image_max_count], video_path=video_path)
+            graph = build_graph_payload(page_id=config.page_id, message=text, link=_post_link(post), image_path=files.get("image", ""), image_paths=files.get("images", [])[:restrictions.image_max_count], video_path=video_path, publish_type=strategy.publish_type)
             plans.append(FacebookPostPlan(
                 post_id=post_id,
                 status="publishable_dry_run",
                 endpoint=graph["endpoint"],
-                payload_preview={**graph["payload"], "strategy": graph["strategy"]},
+                payload_preview={**graph["payload"], "strategy": graph["strategy"], "publish_type": strategy.publish_type, "metrics_profile": strategy.metrics_profile},
+                publish_type=strategy.publish_type,
+                metrics_profile=strategy.metrics_profile,
             ))
-            record_publish_event(db_path, batch_key=batch_key, post_id=post_id, state="planned", reason="facebook_dry_run_plan", payload={"endpoint": graph["endpoint"], "strategy": graph["strategy"]})
+            record_publish_event(db_path, batch_key=batch_key, post_id=post_id, state="planned", reason="facebook_dry_run_plan", payload={"endpoint": graph["endpoint"], "strategy": graph["strategy"], **strategy_as_dict(strategy)})
         else:
             plans.append(FacebookPostPlan(
                 post_id=post_id,
                 status="blocked",
                 reasons=reasons or ["not_publishable"],
+                publish_type=strategy.publish_type,
+                metrics_profile=strategy.metrics_profile,
             ))
-            record_publish_event(db_path, batch_key=batch_key, post_id=post_id, state="held", reason=",".join(reasons or ["not_publishable"]), payload={"reasons": reasons or ["not_publishable"]})
+            record_publish_event(db_path, batch_key=batch_key, post_id=post_id, state="held", reason=",".join(reasons or ["not_publishable"]), payload={"reasons": reasons or ["not_publishable"], **strategy_as_dict(strategy)})
 
     result = FacebookBatchPlan(
         batch_key=batch_key,
@@ -178,7 +186,11 @@ def render_facebook_plan(plan: FacebookBatchPlan) -> str:
             # use `description`. Render the same public text field that will be
             # posted so operators do not see a false "0 chars" for video plans.
             text = item.payload_preview.get('message') or item.payload_preview.get('caption') or item.payload_preview.get('description') or ''
-            lines.append(f"✅ {item.post_id}: would POST {item.endpoint} ({len(text)} chars)")
+            publish_type = getattr(item, "publish_type", item.payload_preview.get("publish_type", "photo_post"))
+            metrics_profile = getattr(item, "metrics_profile", item.payload_preview.get("metrics_profile", "feed_post"))
+            lines.append(f"✅ {item.post_id}: would POST {item.endpoint} [{publish_type}/{metrics_profile}] ({len(text)} chars)")
         else:
-            lines.append(f"○ {item.post_id}: blocked — {', '.join(item.reasons)}")
+            publish_type = getattr(item, "publish_type", "photo_post")
+            metrics_profile = getattr(item, "metrics_profile", "feed_post")
+            lines.append(f"○ {item.post_id}: blocked [{publish_type}/{metrics_profile}] — {', '.join(item.reasons)}")
     return "\n".join(lines)
