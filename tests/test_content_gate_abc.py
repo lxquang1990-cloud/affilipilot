@@ -10,8 +10,9 @@ def test_content_gate_abc_passes_generated_feeding_caption():
         title="Bình thìa ăn dặm silicone cho bé dễ vệ sinh",
         category="feeding",
         price_vnd=79000,
+        image_url="https://cdn.example/test.jpg",
     )
-    draft = generate_safe_facebook_draft(product)
+    draft = generate_safe_facebook_draft(product, prefer_ai=False)
     result = evaluate_content_gates(product.__dict__, draft.full_text)
     assert result.passed, result.reasons
     assert result.layer("A").passed

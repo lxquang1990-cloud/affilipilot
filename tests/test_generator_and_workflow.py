@@ -8,7 +8,7 @@ from affilipilot.workflows.daily_batch import build_batch
 
 def test_generate_safe_facebook_draft_has_disclosure_and_passes():
     product = ProductCandidate(url="https://shopee.vn/a", title="Hộp chia sữa", category="feeding", price_vnd=99000)
-    draft = generate_safe_facebook_draft(product)
+    draft = generate_safe_facebook_draft(product, prefer_ai=False)
     assert "tiếp thị liên kết" in draft.full_text.lower()
     assert draft.compliance.status == ComplianceStatus.PASS
 
@@ -16,8 +16,8 @@ def test_generate_safe_facebook_draft_has_disclosure_and_passes():
 def test_build_batch_outputs_manifest_and_cards(tmp_path):
     input_file = tmp_path / "links.txt"
     input_file.write_text("\n".join([
-        "https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000",
-        "https://shopee.vn/b | title=Vitamin tăng đề kháng | category=vitamin | price=299000",
+        "https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/test.jpg",
+        "https://shopee.vn/b | title=Vitamin tăng đề kháng | category=vitamin | price=299000 | image_url=https://cdn.example/test.jpg",
     ]), encoding="utf-8")
     out_dir = tmp_path / "out"
     manifest = build_batch(input_file, out_dir, limit=2, day=date(2026, 5, 16))
@@ -31,7 +31,7 @@ def test_build_batch_outputs_manifest_and_cards(tmp_path):
 def test_build_batch_reuses_conversion_tracking_post_id(tmp_path):
     input_file = tmp_path / "converted.txt"
     input_file.write_text(
-        "https://go.isclix.com/deep | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | "
+        "https://go.isclix.com/deep | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/test.jpg | "
         "tracking_post_id=post_20260522_1419_gio-sap-xep_001 | tracking_product_id=gio-sap-xep | "
         "tracking_sub1=facebook | tracking_sub2=smartshopping | tracking_sub3=post_20260522_1419_gio-sap-xep_001 | tracking_sub4=gio-sap-xep\n",
         encoding="utf-8",

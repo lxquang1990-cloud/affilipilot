@@ -332,7 +332,38 @@ def _draft_from_parts(product: ProductCandidate, hook: str, body: str, *, metada
     compliance = check_mom_baby_compliance("\n\n".join([hook, body, cta, disclosure]), category=product.category)
     return ContentDraft(product=product, hook=hook, body=body, cta=cta, disclosure=disclosure, compliance=compliance, metadata=metadata or {})
 
+
+def product_has_caption_inputs(product: ProductCandidate) -> bool:
+    """Return True when AI has enough concrete product data for approval copy.
+
+    Prior policy: captions must be AI-generated and concise. If title/media are
+    missing, the correct workflow is to hold the item for enrichment, not to let
+    AI or deterministic fallback invent a generic shopping checklist.
+    """
+    title = (product.title or "").strip()
+    has_title = bool(title) and title.lower() not in {"sản phẩm này", "san pham nay", "product"}
+    has_media_signal = bool(product.image_url or product.image_urls or product.image_path or product.video_url or product.video_urls or product.video_path)
+    return has_title and has_media_signal
+
+def hold_caption_draft(product: ProductCandidate, *, reason: str = "missing_caption_inputs") -> ContentDraft:
+    metadata = {
+        "caption_source": "HELD_FOR_ENRICHMENT",
+        "ai_reason": reason,
+        "caption_quality_passed": False,
+        "caption_quality_score": 0,
+        "caption_quality_source": "workflow_gate",
+        "caption_quality_reasons": [reason, "missing_title_or_media"],
+        "caption_quality_recommendations": ["Enrich product title and official media before AI caption generation."],
+        "publish_type": "held",
+        "metrics_profile": "held",
+    }
+    compliance = check_mom_baby_compliance("", category=product.category)
+    return ContentDraft(product=product, hook="", body="", cta="", disclosure="", compliance=compliance, metadata=metadata)
+
 def generate_safe_facebook_draft(product: ProductCandidate, *, feedback: list[str] | None = None, prefer_ai: bool = True, publish_type: str = "", metrics_profile: str = "") -> ContentDraft:
+    if not product_has_caption_inputs(product):
+        return hold_caption_draft(product)
+
     name = _product_name(product)
     category = product.category.lower()
     strategy = select_facebook_publish_strategy({"product": product.__dict__, "files": {"image": product.image_path, "images": product.image_urls, "video": product.video_path}})
@@ -373,6 +404,9 @@ def generate_safe_facebook_draft(product: ProductCandidate, *, feedback: list[st
             ai_reason = "ai_caption_gate_failed:" + ",".join(category_specific_reasons or content_gate.reasons or quality_judge.reasons or draft.compliance.required_edits or draft.compliance.risk_flags or [draft.compliance.status.value])
             draft.metadata["ai_reason"] = ai_reason
             return draft
+
+    if prefer_ai and product_has_caption_inputs(product):
+        return hold_caption_draft(product, reason=ai_reason or "ai_caption_unavailable")
 
     caption_source = "PLANNER_FALLBACK"
     if feedback:

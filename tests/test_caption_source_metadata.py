@@ -42,7 +42,8 @@ def test_ai_caption_source_metadata_when_ai_passes(monkeypatch):
     assert "Caption source: AI via 9router" in card
 
 
-def test_planner_fallback_records_ai_reason(monkeypatch):
+def test_ai_unavailable_holds_instead_of_planner_fallback(monkeypatch):
+    monkeypatch.setenv("AFFILIPILOT_AI_CAPTION", "1")
     def fake_ai(product, **kwargs):
         class Result:
             ok = False
@@ -59,9 +60,9 @@ def test_planner_fallback_records_ai_reason(monkeypatch):
         image_url="https://example.com/p.jpg",
     )
     draft = generate_safe_facebook_draft(product)
-    assert draft.metadata["caption_source"] == "PLANNER_FALLBACK"
+    assert draft.metadata["caption_source"] == "HELD_FOR_ENRICHMENT"
     assert "model_not_found" in draft.metadata["ai_reason"]
     ctx = build_approval_context(draft, content_gate={"passed": True, "score": 1.0, **draft.metadata})
     card = render_approval_card(draft, batch_key="batch", post_id="post_1", context=ctx)
-    assert "Caption source: PLANNER_FALLBACK" in card
+    assert "HELD_FOR_ENRICHMENT" in card
     assert "AI/fallback reason: ai_caption_http_error:404:model_not_found" in card

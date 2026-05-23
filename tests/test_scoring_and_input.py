@@ -26,7 +26,7 @@ def test_profit_scorer_rewards_trust_discount_and_caption_facts():
 
 
 def test_parse_link_lines_with_metadata():
-    text = "https://shopee.vn/a | title=Hộp chia sữa | category=feeding | price=99000"
+    text = "https://shopee.vn/a | title=Hộp chia sữa | category=feeding | price=99000 | image_url=https://cdn.example/test.jpg"
     products = parse_link_lines(text)
     assert len(products) == 1
     assert products[0].title == "Hộp chia sữa"

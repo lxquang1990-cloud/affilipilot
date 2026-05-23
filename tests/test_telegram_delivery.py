@@ -15,7 +15,7 @@ def test_outbox_add_pending_mark(tmp_path):
 
 def test_queue_approval_batch(tmp_path):
     input_file = tmp_path / "links.txt"
-    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000", encoding="utf-8")
+    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/test.jpg", encoding="utf-8")
     db_path = tmp_path / "db.sqlite"
     create_approval_batch(input_file, tmp_path / "drafts", db_path, batch_key="batch", limit=1)
     outbox_path = tmp_path / "outbox.json"

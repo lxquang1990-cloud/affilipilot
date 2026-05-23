@@ -4,7 +4,7 @@ from affilipilot.models import ProductCandidate
 
 
 def _assert_passes(product: ProductCandidate):
-    draft = generate_safe_facebook_draft(product)
+    draft = generate_safe_facebook_draft(product, prefer_ai=False)
     result = evaluate_product_content(product.__dict__, draft.full_text)
     assert result.passed, result.reasons
     assert "đừng chỉ nhìn giá" not in draft.full_text.lower()
@@ -68,7 +68,7 @@ def test_unknown_category_can_still_use_title_archetype():
         price_vnd=159000,
         notes="merchant=shopee",
     )
-    draft = generate_safe_facebook_draft(product)
+    draft = generate_safe_facebook_draft(product, prefer_ai=False)
     text = draft.full_text.lower()
     assert "sắp xếp" in text or "gọn" in text
     assert "kích thước" in text

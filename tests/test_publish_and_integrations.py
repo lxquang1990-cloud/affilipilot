@@ -42,7 +42,7 @@ def test_publish_gate_allows_when_all_conditions_true(tmp_path):
 
 def test_ready_package_for_approved_post_without_facebook(tmp_path):
     input_file = tmp_path / "links.txt"
-    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000", encoding="utf-8")
+    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/test.jpg", encoding="utf-8")
     db_path = tmp_path / "affilipilot.db"
     out_dir = tmp_path / "drafts"
     create_approval_batch(input_file, out_dir, db_path, batch_key="batch", limit=1)

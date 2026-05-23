@@ -11,11 +11,11 @@ from affilipilot.workflows.discover_convert import run_discover_convert
 
 DEFAULT_SOURCES = [
     {
-        "name": "lazada_khan_sua",
-        "url": "https://www.lazada.vn/tag/khan-sua-em-be/",
-        "source": "LAZADA",
-        "category": "baby_care",
-        "campaign_key": "LAZADA",
+        "name": "shopee_home_organization",
+        "url": "https://shopee.vn/search?keyword=k%E1%BB%87%20s%E1%BA%AFp%20x%E1%BA%BFp%20nh%C3%A0%20b%E1%BA%BFp",
+        "source": "SHOPEE",
+        "category": "home_organization",
+        "campaign_key": "SHOPEE",
     },
 ]
 

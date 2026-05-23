@@ -1,0 +1,25 @@
+{
+  "sources": [
+    {
+      "name": "shopee_home_organization",
+      "url": "https://shopee.vn/search?keyword=k%E1%BB%87%20s%E1%BA%AFp%20x%E1%BA%BFp%20nh%C3%A0%20b%E1%BA%BFp",
+      "source": "SHOPEE",
+      "category": "home_organization",
+      "campaign_key": "SHOPEE"
+    },
+    {
+      "name": "shopee_home_consumable",
+      "url": "https://shopee.vn/search?keyword=kh%C4%83n%20gi%E1%BA%A5y%20gia%20%C4%91%C3%ACnh",
+      "source": "SHOPEE",
+      "category": "home_consumable",
+      "campaign_key": "SHOPEE"
+    },
+    {
+      "name": "shopee_personal_care",
+      "url": "https://shopee.vn/search?keyword=%C4%91%E1%BB%93%20c%C3%A1%20nh%C3%A2n%20ti%E1%BB%87n%20d%E1%BB%A5ng",
+      "source": "SHOPEE",
+      "category": "personal_care",
+      "campaign_key": "SHOPEE"
+    }
+  ]
+}

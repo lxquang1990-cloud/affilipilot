@@ -18,6 +18,10 @@ def create_approval_batch(input_path: str | Path, out_dir: str | Path, db_path: 
     manifest = build_batch(input_path, out_dir, limit=limit, day=day or _day_from_batch_key(batch_key))
     db = AffiliPilotDB(db_path)
     db.save_batch(batch_key=batch_key, source=str(input_path), manifest=manifest)
+    held = int(manifest.get("held_for_enrichment", 0) or 0)
+    eligible = int(manifest.get("approval_eligible", manifest.get("selected", 0)) or 0)
+    if held and not eligible and not batch_key.startswith(("held-", "test-")):
+        raise RuntimeError(f"No approval-eligible products: {held} held for enrichment")
     return manifest
 
 

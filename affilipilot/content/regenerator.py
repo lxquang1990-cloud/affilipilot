@@ -5,7 +5,7 @@ from typing import Callable
 
 from affilipilot.content.caption_quality_ai import judge_caption_quality
 from affilipilot.content.content_gate import ContentGateResult, evaluate_content_gates
-from affilipilot.content.generator import generate_safe_facebook_draft
+from affilipilot.content.generator import generate_safe_facebook_draft, product_has_caption_inputs
 from affilipilot.models import ContentDraft, ProductCandidate
 
 DraftGenerator = Callable[..., ContentDraft]
@@ -41,6 +41,11 @@ def generate_until_content_gate_passes(
     """
     feedback: list[str] | None = None
     attempts: list[RegenerationAttempt] = []
+    if generator is generate_safe_facebook_draft and not product_has_caption_inputs(product):
+        draft = generator(product)
+        gate = ContentGateResult(False, 0.0, ["missing_caption_inputs"], ["enrich_product_before_caption"])
+        attempts.append(RegenerationAttempt(attempt=0, passed=False, score=0.0, reasons=["missing_caption_inputs"]))
+        return RegeneratedDraft(draft=draft, gate=gate, attempts=attempts, regenerated_count=0)
     ai_retry_attempts = max_regenerations if ai_retry_attempts is None else ai_retry_attempts
     draft = generator(product)
     gate = evaluate_content_gates(product.__dict__, draft.full_text)

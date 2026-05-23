@@ -41,6 +41,26 @@ def _latest_batch_key(db_path: Path) -> str | None:
         row = conn.execute("SELECT batch_key FROM batches ORDER BY id DESC LIMIT 1").fetchone()
     return row["batch_key"] if row else None
 
+def _batch_key_for_post_id(db_path: Path, post_id: str) -> str | None:
+    """Resolve old shorthand commands only when the post_id is globally unique."""
+    db = AffiliPilotDB(db_path)
+    db.init()
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT batch_key FROM approvals WHERE post_id = ? ORDER BY id DESC",
+            (post_id,),
+        ).fetchall()
+    if not rows:
+        return None
+    unique = sorted({row["batch_key"] for row in rows})
+    if len(unique) == 1:
+        return unique[0]
+    raise ValueError(
+        "Ambiguous post_id; use /aff_approve <batch_key> <post_id>. "
+        + "Matches: "
+        + ", ".join(unique[:8])
+    )
+
 
 def _write_inbound_links(work_dir: Path, body: str, batch_key: str) -> Path:
     inbound_dir = work_dir / "inbound"
@@ -126,7 +146,16 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
         return AdapterResult(command.intent, render_comment_action(result), [])
 
     if command.intent in {TelegramIntent.APPROVE, TelegramIntent.REJECT, TelegramIntent.NEEDS_EDIT, TelegramIntent.BLACKLIST}:
-        batch_key = command.args.get("batch_key") or _latest_batch_key(config.db_path)
+        post_id = command.args["post_id"]
+        if command.args.get("batch_key"):
+            batch_key = command.args["batch_key"]
+        else:
+            try:
+                batch_key = _batch_key_for_post_id(config.db_path, post_id)
+            except ValueError as exc:
+                return AdapterResult(command.intent, f"⚠️ {exc}", [])
+            if not batch_key:
+                batch_key = _latest_batch_key(config.db_path)
         if not batch_key:
             return AdapterResult(command.intent, "No batch found yet.", [])
         decision_map = {
@@ -135,22 +164,12 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
             TelegramIntent.NEEDS_EDIT: "needs_edit",
             TelegramIntent.BLACKLIST: "blacklisted",
         }
-        post_id = command.args["post_id"]
         reason = command.args.get("reason", "")
         decision = decision_map[command.intent]
         try:
             decide_post(config.db_path, batch_key=batch_key, post_id=post_id, decision=decision, reason=reason)
-        except KeyError:
-            # Backward-compatible shorthand: if the operator used an old card command
-            # and the latest batch has exactly one pending post, bind to that post.
-            if command.args.get("batch_key"):
-                raise
-            approvals = AffiliPilotDB(config.db_path).get_approvals(batch_key)
-            pending = [row for row in approvals if row.get("status") == "pending"]
-            if len(pending) != 1:
-                raise
-            post_id = pending[0]["post_id"]
-            decide_post(config.db_path, batch_key=batch_key, post_id=post_id, decision=decision, reason=reason)
+        except KeyError as exc:
+            return AdapterResult(command.intent, f"⚠️ Approval not found: {batch_key}/{post_id}. Use the exact command from the approval card.", [])
         status_text = render_status(config.db_path, batch_key=batch_key)
         if command.intent == TelegramIntent.APPROVE and config.auto_publish_on_approve:
             if not config.outbox_path:

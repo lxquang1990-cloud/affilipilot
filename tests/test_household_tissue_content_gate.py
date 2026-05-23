@@ -12,7 +12,7 @@ def test_household_tissue_generated_copy_is_specific_and_gate_passes():
         notes="merchant=shopee;keyword=khăn giấy",
     )
 
-    draft = generate_safe_facebook_draft(product)
+    draft = generate_safe_facebook_draft(product, prefer_ai=False)
     text = draft.full_text.lower()
     result = evaluate_content_gates(product.__dict__, draft.full_text)
 

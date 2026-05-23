@@ -37,7 +37,7 @@ def test_page_audience_fit_infers_tech_from_page_name():
     assert "page_audience_tech_product_mother_baby" in result.reasons
 
 def test_baby_pool_copy_is_specific_and_not_generic_template():
-    draft = generate_safe_facebook_draft(ProductCandidate(title="Bể bơi xếp gọn PVC an toàn cho bé", category="baby_play", price_vnd=999000, url="https://lazada.vn/p"))
+    draft = generate_safe_facebook_draft(ProductCandidate(title="Bể bơi xếp gọn PVC an toàn cho bé", category="baby_play", price_vnd=999000, url="https://lazada.vn/p", image_url="https://cdn.example/pool.jpg"), prefer_ai=False)
     text = draft.full_text
     assert "chỉ đáng mua nếu nó giải quyết đúng" not in text
     assert "Điểm nên kiểm tra trước" not in text
@@ -46,7 +46,7 @@ def test_baby_pool_copy_is_specific_and_not_generic_template():
     assert "#chobevui" in text
 
 def test_baby_jumper_copy_is_specific_to_active_play():
-    draft = generate_safe_facebook_draft(ProductCandidate(title="Nhà nhún nhảy cho bé lưới bảo hộ kép an toàn", category="baby_play", url="https://shopee.vn/p"))
+    draft = generate_safe_facebook_draft(ProductCandidate(title="Nhà nhún nhảy cho bé lưới bảo hộ kép an toàn", category="baby_play", url="https://shopee.vn/p", image_url="https://cdn.example/jumper.jpg"), prefer_ai=False)
     text = draft.full_text
     assert "nghịch nước" not in text
     assert "lưới bảo hộ" in text
@@ -54,7 +54,7 @@ def test_baby_jumper_copy_is_specific_to_active_play():
     assert "người lớn quan sát" in text
 
 def test_baby_walker_copy_is_specific_to_walker_safety():
-    draft = generate_safe_facebook_draft(ProductCandidate(title="Xe tập đi 6IN1 đa năng GutyKids kết hợp xe chòi chân", category="baby_play", url="https://shopee.vn/p"))
+    draft = generate_safe_facebook_draft(ProductCandidate(title="Xe tập đi 6IN1 đa năng GutyKids kết hợp xe chòi chân", category="baby_play", url="https://shopee.vn/p", image_url="https://cdn.example/walker.jpg"), prefer_ai=False)
     text = draft.full_text
     assert "bể" not in text.lower()
     assert "dễ lật" in text

@@ -587,12 +587,37 @@ def cmd_draft_links(args: argparse.Namespace) -> int:
         raise SystemExit(f"Input file not found: {input_path}")
 
     batch_key = args.batch_key or datetime.now().strftime("draft-%Y%m%d-%H%M%S")
+    source_input_path = input_path
+    conversion_summary = None
+    if args.convert_affiliate:
+        convert_dir = Path(args.work_dir) / batch_key
+        converted_json = convert_dir / "accesstrade-converted.json"
+        converted_input = convert_dir / "converted.links.txt"
+        conversion_summary = convert_input_links(
+            input_path,
+            converted_json,
+            dry_run=not args.real_affiliate,
+            limit=args.limit,
+            campaign_key=args.campaign_key,
+            allow_channel_urls=args.allow_channel_urls,
+        )
+        write_converted_input(converted_json, converted_input)
+        source_input_path = converted_input
+        if conversion_summary.get("failed_count"):
+            failed = conversion_summary.get("failed_count")
+            total = conversion_summary.get("total")
+            raise SystemExit(f"Affiliate conversion failed for {failed}/{total} products; see {converted_json}")
+        if not converted_input.read_text(encoding="utf-8").strip():
+            raise SystemExit(f"Affiliate conversion produced no usable products; see {converted_json}")
+
     out_dir = Path(args.work_dir) / batch_key / "drafts"
     demo_day = date(2026, 5, 16) if batch_key.startswith("test-") else None
-    manifest = create_approval_batch(input_path, out_dir, args.db, batch_key=batch_key, limit=args.limit, day=demo_day)
+    manifest = create_approval_batch(source_input_path, out_dir, args.db, batch_key=batch_key, limit=args.limit, day=demo_day)
     messages = queue_approval_batch(args.db, batch_key=batch_key, outbox_path=args.outbox)
 
     print(f"AffiliPilot draft-links complete: {batch_key}")
+    if conversion_summary is not None:
+        print(f"Affiliate conversion: ok={conversion_summary['ok_count']} failed={conversion_summary['failed_count']} dry_run={conversion_summary['dry_run']} input={source_input_path}")
     print(f"Products: {manifest['total_products']} considered, {manifest['selected']} selected")
     print(f"Drafts: {out_dir}")
     print(f"Approval preview: {out_dir / 'approval_batch_preview.txt'}")
@@ -1086,7 +1111,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_profit_e2e)
 
     p = sub.add_parser("multi-source-scan", help="Run multiple marketplace sources, merge/dedupe/rank candidates, and write one selected input file")
-    p.add_argument("--sources", default="config/multi-source.mother-baby.json", help="JSON source config; defaults to mother/baby multi-source config")
+    p.add_argument("--sources", default="config/multi-source.smart-shopping.json", help="JSON source config; defaults to smart-shopping multi-niche config")
     p.add_argument("--work-dir", default="data/runs/multi-source-scan")
     p.add_argument("--per-source-limit", type=int, default=5)
     p.add_argument("--limit", type=int, default=5)
@@ -1098,7 +1123,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_multi_source_scan)
 
     p = sub.add_parser("multi-source-approval", help="Multi-source scanner to local approval batch; no Telegram delivery and no publish")
-    p.add_argument("--sources", default="config/multi-source.mother-baby.json")
+    p.add_argument("--sources", default="config/multi-source.smart-shopping.json")
     p.add_argument("--batch-key", required=True)
     p.add_argument("--work-dir", default="data/runs/multi-source-approval")
     p.add_argument("--db", default="data/affilipilot.db")
@@ -1353,7 +1378,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--work-dir", default="data/telegram-mock", help="Work directory for inbound links and drafts")
     p.add_argument("--limit", type=int, default=5)
     p.add_argument("--outbox", default="", help="Optional local Telegram outbox JSON to queue generated approval messages")
-    p.add_argument("--publish-on-approve", action="store_true", help="For /aff_approve, run publish-safe and publish immediately if PASS")
+    p.add_argument("--publish-on-approve", action="store_true", default=True, help="For /aff_approve, run publish-safe and publish immediately if PASS (default: enabled)")
+    p.add_argument("--no-publish-on-approve", dest="publish_on_approve", action="store_false", help="Only record approval; do not publish after approval")
     p.add_argument("--receipt", default="", help="Delivery/approval receipt; defaults to a local approval receipt")
     p.add_argument("--publish-dir", default="data/telegram-mock/publish", help="Directory for approval-triggered publish artifacts")
     p.set_defaults(func=cmd_handle_text)
@@ -1425,6 +1451,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--limit", type=int, default=5)
     p.add_argument("--outbox", default="data/outbox/telegram.json")
     p.add_argument("--show-preview", action="store_true", help="Print queued Telegram approval messages after generating them")
+    p.add_argument("--convert-affiliate", action="store_true", help="Convert product URLs to Accesstrade links before drafting; blocks if conversion fails")
+    p.add_argument("--real-affiliate", action="store_true", help="With --convert-affiliate, call real Accesstrade API instead of dry-run")
+    p.add_argument("--campaign-key", default="", help="With --convert-affiliate, force campaign key such as SHOPEE or LAZADA")
+    p.add_argument("--allow-channel-urls", action="store_true", help="With --convert-affiliate, allow marketplace channel/search URLs past preflight")
     p.set_defaults(func=cmd_draft_links)
 
     p = sub.add_parser("outbox", help="Render pending local Telegram outbox messages")

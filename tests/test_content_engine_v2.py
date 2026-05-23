@@ -9,9 +9,10 @@ def test_home_appliance_caption_contains_concrete_buying_facts():
         title="Máy lọc không khí chính hãng bảo hành 12 tháng",
         category="home_appliance",
         price_vnd=1290000,
+        image_url="https://cdn.example/test.jpg",
         notes="merchant=lazada_kol;discount_rate=0.45;discount_vnd=500000",
     )
-    draft = generate_safe_facebook_draft(product)
+    draft = generate_safe_facebook_draft(product, prefer_ai=False)
     text = draft.full_text.lower()
     assert "bảo hành" in text
     assert any(term in text for term in ["đánh giá", "review", "công suất", "độ ồn"])

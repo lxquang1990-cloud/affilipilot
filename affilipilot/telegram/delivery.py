@@ -288,6 +288,8 @@ def queue_approval_batch(db_path: str | Path, *, batch_key: str, outbox_path: st
     outbox = Outbox(outbox_path)
     manifest = batch["manifest"]
     preview_path = Path(manifest["out_dir"]) / "approval_batch_preview.txt"
+    eligible_posts = [post for post in manifest.get("posts", []) if post.get("approval_eligible", True)]
+    held_posts = [post for post in manifest.get("posts", []) if not post.get("approval_eligible", True)]
     messages = [
         OutboxMessage(
             id=f"{batch_key}:summary",
@@ -296,20 +298,27 @@ def queue_approval_batch(db_path: str | Path, *, batch_key: str, outbox_path: st
                 f"🐌 AffiliPilot approval batch — {batch_key}",
                 f"Products considered: {manifest.get('total_products')}",
                 f"Drafts selected: {manifest.get('selected')}",
+                f"Approval eligible: {len(eligible_posts)}",
+                f"Held for enrichment: {len(held_posts)}",
                 f"Preview file: {preview_path}",
                 "Commands: /aff_approve <batch_key> <post_id>, /aff_reject <batch_key> <post_id>, /aff_edit <batch_key> <post_id>, /aff_blacklist <batch_key> <post_id>",
             ]),
             attachments=[str(preview_path)] if preview_path.exists() else [],
         )
     ]
-    for post in manifest.get("posts", []):
-        card_path = Path(post["files"]["telegram_card"])
-        text = card_path.read_text(encoding="utf-8", errors="ignore") if card_path.exists() else json.dumps(post, ensure_ascii=False)
+    if held_posts and not eligible_posts:
+        messages[0].text += "\nStatus: HELD — missing title/media, not queued for approval."
+    for post in eligible_posts:
+        card_path = Path(post["files"].get("telegram_card", ""))
+        if not card_path.exists():
+            continue
+        text = card_path.read_text(encoding="utf-8", errors="ignore")
+        attachments = [post["files"].get("post_text", "")] if post["files"].get("post_text") else []
         messages.append(OutboxMessage(
             id=f"{batch_key}:{post['post_id']}",
             kind="approval_card",
             text=text,
-            attachments=[post["files"].get("post_text", "")],
+            attachments=attachments,
         ))
     for message in messages:
         outbox.add(message)

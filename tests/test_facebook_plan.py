@@ -13,7 +13,7 @@ def test_build_graph_payload():
 
 def test_facebook_plan_blocks_without_approval(tmp_path):
     input_file = tmp_path / "links.txt"
-    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000", encoding="utf-8")
+    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/test.jpg", encoding="utf-8")
     db = tmp_path / "db.sqlite"
     create_approval_batch(input_file, tmp_path / "drafts", db, batch_key="batch", limit=1)
     plan = plan_facebook_batch(db, batch_key="batch", out_path=tmp_path / "plan.json", config=FacebookConfig(page_id="page", page_access_token="token"))

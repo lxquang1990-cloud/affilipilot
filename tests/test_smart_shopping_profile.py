@@ -40,10 +40,10 @@ def test_ai_caption_prompt_not_mother_baby_or_old_page_anchored():
     assert "facebook page bán đồ gia đình" not in lowered
 
 
-def test_page_audience_defaults_to_smart_shopping(monkeypatch):
+def test_page_audience_defaults_to_multi_niche(monkeypatch):
     monkeypatch.delenv("AFFILIPILOT_PAGE_AUDIENCE", raising=False)
     monkeypatch.delenv("AFFILIPILOT_PAGE_PROFILE", raising=False)
-    assert configured_page_audience() == "smart_shopping"
+    assert configured_page_audience() == "multi_niche"
 
 
 def test_smart_shopping_page_fit_accepts_household_consumable():
@@ -61,3 +61,17 @@ def test_early_filter_normalizes_household_consumable_and_organization():
 def test_portfolio_prefers_smart_shopping_verticals_before_mother_baby():
     assert PREFERRED_ORDER.index("home_consumable") < PREFERRED_ORDER.index("mother_baby")
     assert PREFERRED_ORDER.index("home_organization") < PREFERRED_ORDER.index("mother_baby")
+
+
+
+def test_legacy_mother_baby_page_only_applies_when_page_name_explicit(monkeypatch):
+    monkeypatch.delenv("AFFILIPILOT_PAGE_AUDIENCE", raising=False)
+    monkeypatch.delenv("AFFILIPILOT_PAGE_PROFILE", raising=False)
+    motorbike = {"category": "motorbike_parts", "title": "Ốp sàn xe máy Honda"}
+
+    household_result = evaluate_page_audience_fit({"category": "home_consumable", "title": "Khăn giấy gia đình"})
+    explicit_result = evaluate_page_audience_fit(motorbike, page_name="Nâng Niu Trái Ngọt Tình Yêu")
+
+    assert household_result.passed is True
+    assert explicit_result.passed is False
+    assert "page_audience_mother_baby_product_unknown" in explicit_result.reasons

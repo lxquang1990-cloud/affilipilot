@@ -5,6 +5,7 @@ from dataclasses import asdict
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from affilipilot.content.generator import product_has_caption_inputs
 from affilipilot.content.regenerator import generate_until_content_gate_passes
 from affilipilot.links.subid import build_utm, make_tracking_identity
 from affilipilot.models import TrackingIdentity
@@ -49,6 +50,7 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
             )
         else:
             identity = make_tracking_identity(product.title or product.url, index, day=day)
+        missing_caption_inputs = not product_has_caption_inputs(product)
         regenerated = generate_until_content_gate_passes(product)
         draft = regenerated.draft
         card_path = out_dir / f"{identity.post_id}.telegram.txt"
@@ -83,8 +85,9 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
         }
         approval_context = build_approval_context(draft, post=post_for_context, content_gate=content_gate_for_context)
         card = render_approval_card(draft, post_id=identity.post_id, batch_key=out_dir.parent.name, context=approval_context)
-        card_path.write_text(card, encoding="utf-8")
-        post_path.write_text(draft.full_text + "\n", encoding="utf-8")
+        if not missing_caption_inputs:
+            card_path.write_text(card, encoding="utf-8")
+            post_path.write_text(draft.full_text + "\n", encoding="utf-8")
         post = {
             "post_id": identity.post_id,
             "product": asdict(product),
@@ -97,6 +100,8 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
                 "risk_flags": draft.compliance.risk_flags,
                 "required_edits": draft.compliance.required_edits,
             },
+            "approval_eligible": not missing_caption_inputs,
+            "hold_reasons": (["missing_caption_inputs"] if missing_caption_inputs else []),
             "content_gate": {
                 "passed": regenerated.gate.passed,
                 "score": regenerated.gate.score,
@@ -128,14 +133,15 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
                 "video_urls": product.video_urls or ([product.video_url] if product.video_url else []),
             },
             "files": {
-                "telegram_card": str(card_path),
-                "post_text": str(post_path),
+                "telegram_card": str(card_path) if not missing_caption_inputs else "",
+                "post_text": str(post_path) if not missing_caption_inputs else "",
                 "image": media_result.local_path if media_result.ok else "",
                 "images": [item.local_path for item in gallery_results if item.ok],
             },
         }
         posts.append(post)
-        cards.append(card)
+        if not missing_caption_inputs:
+            cards.append(card)
 
     manifest = {
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -143,6 +149,8 @@ def build_batch(input_path: str | Path, out_dir: str | Path, *, limit: int = 5, 
         "out_dir": str(out_dir),
         "total_products": len(products),
         "selected": len(posts),
+        "approval_eligible": sum(1 for post in posts if post.get("approval_eligible", True)),
+        "held_for_enrichment": sum(1 for post in posts if not post.get("approval_eligible", True)),
         "posts": posts,
     }
     (out_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

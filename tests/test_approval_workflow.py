@@ -4,7 +4,7 @@ from affilipilot.workflows.approval import create_approval_batch, decide_post, r
 
 def test_create_batch_and_decide(tmp_path):
     input_file = tmp_path / "links.txt"
-    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000", encoding="utf-8")
+    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/test.jpg", encoding="utf-8")
     out_dir = tmp_path / "out"
     db_path = tmp_path / "affilipilot.db"
 
@@ -24,7 +24,7 @@ def test_create_batch_and_decide(tmp_path):
 
 def test_blacklist_decision_records_blacklist(tmp_path):
     input_file = tmp_path / "links.txt"
-    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000", encoding="utf-8")
+    input_file.write_text("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/test.jpg", encoding="utf-8")
     out_dir = tmp_path / "out"
     db_path = tmp_path / "affilipilot.db"
     create_approval_batch(input_file, out_dir, db_path, batch_key="test-batch", limit=1)

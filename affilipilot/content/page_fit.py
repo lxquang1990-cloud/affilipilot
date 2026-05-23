@@ -11,6 +11,9 @@ SMART_SHOPPING_CATEGORIES = {
     "baby_care", "feeding", "toy", "baby_play", "mother_baby",
 }
 TECH_CATEGORIES = {"electronics", "phone", "smartphone", "laptop", "software"}
+MOTHER_BABY_PAGE_NAMES = {
+    "nâng niu trái ngọt tình yêu",
+}
 PAGE_AUDIENCE_BY_PAGE_NAME = {
     "itnews vietnam": "tech",
     "itnews": "tech",
@@ -22,10 +25,20 @@ class PageAudienceFitResult:
     reasons: list[str] = field(default_factory=list)
 
 def configured_page_audience() -> str:
-    return os.environ.get("AFFILIPILOT_PAGE_AUDIENCE", os.environ.get("AFFILIPILOT_PAGE_PROFILE", "smart_shopping")).strip().lower() or "smart_shopping"
+    return os.environ.get("AFFILIPILOT_PAGE_AUDIENCE", os.environ.get("AFFILIPILOT_PAGE_PROFILE", "multi_niche")).strip().lower() or "multi_niche"
 
 def audience_from_page_name(page_name: str) -> str:
+    """Map explicit page names only when the operator has configured a page.
+
+    The default AffiliPilot path must stay money-first / multi-niche. Legacy
+    mother/baby behavior is enabled only for explicit page/campaign config, not
+    because an old page name lives in memory.
+    """
     normalized = " ".join((page_name or "").strip().lower().split())
+    if not normalized:
+        return ""
+    if normalized in MOTHER_BABY_PAGE_NAMES:
+        return "mother_baby"
     return PAGE_AUDIENCE_BY_PAGE_NAME.get(normalized, "")
 
 def evaluate_page_audience_fit(product: dict[str, Any], *, page_audience: str | None = None, page_name: str = "") -> PageAudienceFitResult:

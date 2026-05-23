@@ -8,9 +8,9 @@ def test_draft_links_cli_generates_batch_and_outbox(tmp_path, capsys):
 
     code = main([
         "draft-links",
-        "--link", "https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000",
-        "--link", "https://shopee.vn/b | title=Yếm ăn dặm silicone mềm | category=feeding | price=79000",
-        "--link", "https://shopee.vn/c | title=Khăn sữa cotton mềm | category=baby-care | price=59000",
+        "--link", "https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/a.jpg",
+        "--link", "https://shopee.vn/b | title=Yếm ăn dặm silicone mềm | category=feeding | price=79000 | image_url=https://cdn.example/b.jpg",
+        "--link", "https://shopee.vn/c | title=Khăn sữa cotton mềm | category=baby-care | price=59000 | image_url=https://cdn.example/c.jpg",
         "--work-dir", str(work_dir),
         "--db", str(db),
         "--batch-key", "test-draft-links",
