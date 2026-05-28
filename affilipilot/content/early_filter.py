@@ -123,4 +123,8 @@ def evaluate_early_product_filter(product: ProductCandidate) -> EarlyFilterResul
         reasons.append("missing_title")
         flags.append("insufficient_product_data")
 
+    if product.price_vnd is not None and product.price_vnd < 1_000:
+        reasons.append("invalid_or_fake_price:<1000vnd")
+        flags.append("invalid_price")
+
     return EarlyFilterResult(passed=not reasons, reasons=reasons, risk_flags=sorted(set(flags)), normalized_category=normalized)

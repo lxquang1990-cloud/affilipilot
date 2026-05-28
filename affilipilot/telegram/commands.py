@@ -45,6 +45,19 @@ def parse_telegram_text(text: str) -> ParsedCommand:
     parts = raw.split()
     cmd = parts[0].lower() if parts and parts[0].startswith("/") else ""
 
+    quick_approve = {"ok", "okay", "approve", "duyệt", "duyet", "đăng", "dang", "publish"}
+    quick_reject = {"no", "reject", "ko", "không", "khong", "bỏ", "bo"}
+    quick_edit = {"edit", "sửa", "sua"}
+    quick_blacklist = {"ban", "blacklist", "chặn", "chan"}
+    if lowered in quick_approve:
+        return ParsedCommand(TelegramIntent.APPROVE, {"post_id": "latest", "reason": "quick_reply"}, raw)
+    if lowered in quick_reject:
+        return ParsedCommand(TelegramIntent.REJECT, {"post_id": "latest", "reason": "quick_reply"}, raw)
+    if lowered in quick_edit:
+        return ParsedCommand(TelegramIntent.NEEDS_EDIT, {"post_id": "latest", "reason": "quick_reply"}, raw)
+    if lowered in quick_blacklist:
+        return ParsedCommand(TelegramIntent.BLACKLIST, {"post_id": "latest", "reason": "quick_reply"}, raw)
+
     if cmd in {"/help", "/start"}:
         return ParsedCommand(TelegramIntent.HELP, {}, raw)
     if cmd == "/status":
@@ -86,6 +99,7 @@ def help_text() -> str:
         "/campaign_status [batch_key] — one-screen campaign dashboard",
         "/next_action [batch_key] — show exact next operator step",
         "/doctor [batch_key] — read-only system/batch audit",
+        "Quick reply trên card mới nhất: ok / no / sửa / ban",
         "/aff_approve <batch_key> <post_id> [reason]",
         "/aff_reject <batch_key> <post_id> [reason]",
         "/aff_edit <batch_key> <post_id> [reason]",

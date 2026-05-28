@@ -24,12 +24,12 @@ log_file="$ROOT/logs/scheduled-e2e.log"
 {
   echo "===== $(date --iso-8601=seconds) batch=${batch} start ====="
   set +e
-  timeout 45m env PYTHONPATH=. /usr/bin/python3 -m affilipilot auto-source-hunter \
+  timeout 45m env PYTHONPATH=. /usr/bin/python3 -m affilipilot profit-e2e \
     --batch-key "$batch" \
     --work-dir "$work_dir" \
     --db data/affilipilot.db \
     --outbox "$outbox" \
-    --collect-limit 80 \
+    --discover-limit 80 \
     --limit 1 \
     --real-accesstrade
   code=$?
@@ -37,7 +37,7 @@ log_file="$ROOT/logs/scheduled-e2e.log"
   echo "===== $(date --iso-8601=seconds) batch=${batch} hunter_exit=${code} work_dir=${work_dir} outbox=${outbox} ====="
 
   # Always notify the operator that the scheduled job ran, including the
-  # valid no-post case. auto-source-hunter writes a digest message to the
+  # valid no-post case. profit-e2e writes a digest message to the
   # outbox even when no publish-ready card is produced.
   if [[ -s "$outbox" ]]; then
     echo "===== $(date --iso-8601=seconds) batch=${batch} telegram_delivery_start outbox=${outbox} ====="

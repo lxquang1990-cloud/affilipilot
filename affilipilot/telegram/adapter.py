@@ -62,6 +62,25 @@ def _batch_key_for_post_id(db_path: Path, post_id: str) -> str | None:
     )
 
 
+def _latest_pending_approval(db_path: Path) -> tuple[str, str] | None:
+    """Return the newest pending approval for quick replies like 'ok' or 'no'."""
+    db = AffiliPilotDB(db_path)
+    db.init()
+    with db.connect() as conn:
+        row = conn.execute(
+            """
+            SELECT batch_key, post_id
+            FROM approvals
+            WHERE status = 'pending'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    if not row:
+        return None
+    return row["batch_key"], row["post_id"]
+
+
 def _write_inbound_links(work_dir: Path, body: str, batch_key: str) -> Path:
     inbound_dir = work_dir / "inbound"
     inbound_dir.mkdir(parents=True, exist_ok=True)
@@ -147,7 +166,12 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
 
     if command.intent in {TelegramIntent.APPROVE, TelegramIntent.REJECT, TelegramIntent.NEEDS_EDIT, TelegramIntent.BLACKLIST}:
         post_id = command.args["post_id"]
-        if command.args.get("batch_key"):
+        if post_id == "latest":
+            latest = _latest_pending_approval(config.db_path)
+            if not latest:
+                return AdapterResult(command.intent, "No pending approval found for quick reply.", [])
+            batch_key, post_id = latest
+        elif command.args.get("batch_key"):
             batch_key = command.args["batch_key"]
         else:
             try:

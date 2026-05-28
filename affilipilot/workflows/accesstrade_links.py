@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from affilipilot.accesstrade.client import AccesstradeCampaign, AccesstradeConfig, create_tracking_link
+from affilipilot.accesstrade.enrich import enrich_product_from_accesstrade
 from affilipilot.links.subid import build_utm, make_tracking_identity
 from affilipilot.marketplaces import classify_url, discovery_advice
 from affilipilot.workflows.daily_batch import load_products
@@ -48,6 +49,8 @@ def convert_input_links(input_path: str | Path, out_path: str | Path, *, dry_run
         products = products[:limit]
     converted = []
     for index, product in enumerate(products, 1):
+        if not dry_run:
+            product = enrich_product_from_accesstrade(product)
         identity = make_tracking_identity(product.title or product.url, index)
         utm = build_utm(identity)
         preflight_ok, preflight = _preflight_conversion_url(product.url)

@@ -17,7 +17,7 @@ def render_approval_card(draft: ContentDraft, *, post_id: str = "draft", batch_k
     reject = f"/aff_reject {batch_key} {post_id}" if batch_key else f"/aff_reject {post_id}"
     edit = f"/aff_edit {batch_key} {post_id}" if batch_key else f"/aff_edit {post_id}"
     blacklist = f"/aff_blacklist {batch_key} {post_id}" if batch_key else f"/aff_blacklist {post_id}"
-    buttons = f"Commands: {approve} | {reject} | {edit} | {blacklist}"
+    buttons = f"Reply: ok = approve+publish | no = reject | sửa = needs edit | ban = blacklist\nCommands: {approve} | {reject} | {edit} | {blacklist}"
     if draft.compliance.status.value == "block":
         buttons = f"Commands: {reject} | {blacklist} — blocked by compliance gate"
     elif draft.compliance.status.value == "needs_review":

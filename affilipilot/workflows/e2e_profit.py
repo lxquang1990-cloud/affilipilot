@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import urllib.error
 from pathlib import Path
@@ -19,8 +20,11 @@ from affilipilot.scoring.portfolio import select_portfolio
 from affilipilot.scoring.product_score import score_product
 from affilipilot.sources.manual_input import parse_link_lines
 from affilipilot.telegram.delivery import queue_approval_batch
+from affilipilot.telegram.outbox import Outbox, OutboxMessage
 from affilipilot.workflows.accesstrade_links import convert_input_links, write_converted_input
 from affilipilot.workflows.approval import create_approval_batch
+from affilipilot.scanner.enrich import enrich_batch_media
+from affilipilot.snailbot_integration import AffiliPilotRunState, append_event, write_run_state
 
 # Accesstrade docs notes used here:
 # - Datafeed does not document category filtering; `target_category` is internal only.
@@ -85,6 +89,7 @@ def _line_for_product(product) -> str:
         "price": product.price_vnd,
         "commission_rate": product.commission_rate,
         "image_url": product.image_url,
+        "image_urls": ",".join(product.image_urls or []),
         "affiliate_url": product.affiliate_url,
         "tracking_url": product.tracking_url,
         "notes": product.notes,
@@ -97,6 +102,90 @@ def _line_for_product(product) -> str:
         if value not in (None, ""):
             parts.append(f"{key}={value}")
     return " | ".join(str(part) for part in parts)
+
+
+
+def _commission_rate_from_campaign(campaign: dict[str, Any] | None) -> tuple[float | None, list[str]]:
+    if not campaign:
+        return None, ["commission_policy:missing_campaign_match"]
+    raw = campaign.get("max_commission") or campaign.get("min_commission")
+    if raw in (None, ""):
+        return None, ["commission_policy:missing_rate"]
+    try:
+        rate = float(raw)
+    except (TypeError, ValueError):
+        return None, ["commission_policy:invalid_rate"]
+    # Accesstrade campaign APIs may return either 8.0 or 0.08. Normalize to ratio.
+    if rate > 1:
+        rate = rate / 100
+    return max(0.0, rate), [f"commission_policy:campaign_rate={rate:.4f}"]
+
+def _campaign_for_source(source: dict[str, Any], lookup: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    for value in (source.get("merchant", ""), source.get("campaign", ""), source.get("domain", "")):
+        campaign = lookup.get(_norm_alias(str(value)))
+        if campaign:
+            return campaign
+    return None
+
+def _conversion_likelihood(product, *, base_score: int, taste_score: int) -> tuple[float, list[str]]:
+    likelihood = 0.02 + (max(0, min(100, base_score)) / 100) * 0.06 + (max(0, min(100, taste_score)) / 100) * 0.04
+    reasons = [f"conversion_likelihood_base={likelihood:.4f}"]
+    notes = (product.notes or "").lower()
+    if "discount_rate=" in notes:
+        try:
+            rate = float(notes.split("discount_rate=", 1)[1].split(";", 1)[0].split(" ", 1)[0])
+            if rate > 1:
+                rate = rate / 100
+            if rate >= 0.30:
+                likelihood += 0.015
+                reasons.append("conversion_likelihood_discount>=30%+0.015")
+            elif rate >= 0.15:
+                likelihood += 0.008
+                reasons.append("conversion_likelihood_discount>=15%+0.008")
+        except ValueError:
+            pass
+    if product.image_url or product.image_urls or product.image_path:
+        likelihood += 0.005
+        reasons.append("conversion_likelihood_media+0.005")
+    likelihood = max(0.005, min(0.20, likelihood))
+    reasons.append(f"conversion_likelihood_final={likelihood:.4f}")
+    return likelihood, reasons
+
+def _expected_profit_score(product, *, base_score: int, taste_score: int, commission_rate: float | None, commission_reasons: list[str]) -> tuple[int, dict[str, Any], list[str]]:
+    price = int(product.price_vnd or 0)
+    rate = float(commission_rate or product.commission_rate or 0)
+    if rate and not product.commission_rate:
+        product.commission_rate = rate
+    likelihood, likelihood_reasons = _conversion_likelihood(product, base_score=base_score, taste_score=taste_score)
+    expected_commission_vnd = price * rate
+    expected_profit_vnd = expected_commission_vnd * likelihood
+    # Profit-first, but not blind: combine monetization with quality/taste.
+    profit_points = min(70, int(expected_profit_vnd / 250))
+    quality_points = int(max(0, min(100, base_score)) * 0.20) + int(max(0, min(100, taste_score)) * 0.10)
+    final = max(0, min(100, profit_points + quality_points))
+    metrics = {
+        "sale_price_vnd": price,
+        "commission_rate": rate,
+        "expected_commission_vnd": round(expected_commission_vnd, 2),
+        "conversion_likelihood": round(likelihood, 4),
+        "expected_profit_vnd": round(expected_profit_vnd, 2),
+        "profit_points": profit_points,
+        "quality_points": quality_points,
+    }
+    reasons = [
+        "score_model:expected_profit",
+        f"sale_price_vnd={price}",
+        f"commission_rate={rate:.4f}",
+        f"expected_commission_vnd={expected_commission_vnd:.0f}",
+        f"expected_profit_vnd={expected_profit_vnd:.0f}",
+        f"profit_points={profit_points}",
+        f"quality_points={quality_points}",
+    ] + commission_reasons + likelihood_reasons
+    if not price:
+        reasons.append("expected_profit_missing_price")
+    if not rate:
+        reasons.append("expected_profit_missing_commission_rate")
+    return final, metrics, reasons
 
 def _load_sources(path: str | Path | None) -> list[dict[str, Any]]:
     if not path:
@@ -151,7 +240,27 @@ def _source_filter_note(source: dict[str, Any]) -> str:
         return "category_filter_not_supported_by_accesstrade:datafeed_broad_fetch_internal_target_category_only"
     return ""
 
-def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Path = DEFAULT_SOURCE_CACHE_DIR) -> dict[str, Any]:
+def _source_page(source: dict[str, Any], *, batch_key: str = "") -> int:
+    """Return a deterministic rotating page for scheduled discovery.
+
+    Accesstrade datafeeds default to page=1. Running every cron slot against
+    page=1 makes reports look identical and keeps re-scanning the same products.
+    Use a stable hash of batch+source so retries are reproducible while later
+    slots naturally explore different pages. Explicit source page still wins.
+    """
+    explicit = source.get("page")
+    if explicit not in (None, ""):
+        try:
+            return max(1, int(explicit))
+        except (TypeError, ValueError):
+            return 1
+    if not batch_key:
+        return 1
+    seed = f"{batch_key}:{source.get('name') or source.get('kind', 'source')}"
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    return 1 + (int(digest[:8], 16) % 10)
+
+def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Path = DEFAULT_SOURCE_CACHE_DIR, batch_key: str = "") -> dict[str, Any]:
     name = source.get("name") or source.get("kind", "source")
     out = out_dir / f"{name}.json"
     run_cache_out = out_dir / "cache" / f"{name}.json"
@@ -169,6 +278,7 @@ def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Pat
                 discount_rate_from=source.get("discount_rate_from", ""),
                 price_from=source.get("price_from", ""),
                 price_to=source.get("price_to", ""),
+                page=_source_page(source, batch_key=batch_key),
                 limit=int(source.get("limit", 50)),
             )
     except urllib.error.HTTPError as exc:
@@ -182,6 +292,7 @@ def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Pat
         if cached:
             data["fallback_error"] = f"source_fetch_error:{type(exc).__name__}"
     filter_note = _source_filter_note(source)
+    data["requested_page"] = _source_page(source, batch_key=batch_key) if source.get("kind") != "top_products" else None
     if filter_note:
         data["source_filter_note"] = filter_note
         data["target_category"] = source.get("target_category", "")
@@ -258,18 +369,40 @@ def run_profit_first_e2e(
     campaign_registry_path = work_dir / "campaign-registry.json"
     drafts_dir = work_dir / "drafts"
     publish_dir = work_dir / "publish-preview"
+    state_path = work_dir / "snailbot-state.json"
+    events_path = work_dir / "snailbot-events.jsonl"
+
+    def record(stage: str, message: str, data: dict[str, Any] | None = None, *, status: str = "running") -> None:
+        append_event(events_path, run_id=batch_key, kind="workflow.stage", message=message, data={"stage": stage, **(data or {})})
+        write_run_state(
+            state_path,
+            AffiliPilotRunState(
+                batch_key=batch_key,
+                stage=stage,
+                status=status,
+                artifacts=[str(events_path)],
+                metrics=data or {},
+            ),
+        )
+
+    record("started", "Profit-first E2E started", {"work_dir": str(work_dir), "real_accesstrade": real_accesstrade, "queue_telegram": queue_telegram})
 
     sources = _load_sources(sources_path)
     campaign_registry = write_campaign_registry(campaign_registry_path) if real_accesstrade else {"ok": False, "campaigns": []}
+    record("campaign_registry", "Campaign registry loaded", {"ok": campaign_registry.get("ok"), "campaign_count": len(campaign_registry.get("campaigns", []))})
     campaign_lookup = _campaign_lookup(campaign_registry)
     source_reports = []
     candidates_by_url: dict[str, dict[str, Any]] = {}
     early_blocked: list[dict[str, Any]] = []
     taste_blocked: list[dict[str, Any]] = []
     for source in sources:
-        report = _fetch_source(source, source_dir, cache_dir=cache_dir)
-        campaign_id = _source_campaign_id(source, campaign_lookup)
+        report = _fetch_source(source, source_dir, cache_dir=cache_dir, batch_key=batch_key)
+        campaign = _campaign_for_source(source, campaign_lookup)
+        campaign_id = str(campaign.get("campaign_id", "")) if campaign else _source_campaign_id(source, campaign_lookup)
+        commission_rate, commission_reasons = _commission_rate_from_campaign(campaign)
         report["campaign_id"] = campaign_id
+        report["commission_rate"] = commission_rate
+        report["commission_reasons"] = commission_reasons
         source_reports.append({k: v for k, v in report.items() if k != "raw_redacted"})
         temp_input = source_dir / f"{report['name']}.input.txt"
         write_products_input(report.get("products", [])[:discover_limit], temp_input)
@@ -286,14 +419,31 @@ def run_profit_first_e2e(
             if not taste.passed:
                 taste_blocked.append({"source": report["name"], "url": product.url, "title": product.title, "category": product.category, "taste_score": taste.score, "reasons": taste.reasons, "penalties": taste.penalties})
                 continue
-            final_score = min(100, int(score["score"]) + max(0, taste.score - 50) // 2)
+            final_score, profit_metrics, profit_reasons = _expected_profit_score(
+                product,
+                base_score=int(score["score"]),
+                taste_score=int(taste.score),
+                commission_rate=commission_rate,
+                commission_reasons=commission_reasons,
+            )
             key = _norm_url(product.url or product.original_url)
-            item = {"product": product, "score": final_score, "score_reasons": list(score.get("reasons", [])) + [f"taste_score:{taste.score}"] + taste.reasons + taste.penalties, "source": report["name"], "campaign_key": report.get("campaign_key", ""), "campaign_id": campaign_id, "taste_score": taste.score}
+            item = {"product": product, "score": final_score, "score_reasons": profit_reasons + list(score.get("reasons", [])) + [f"taste_score:{taste.score}"] + taste.reasons + taste.penalties, "source": report["name"], "campaign_key": report.get("campaign_key", ""), "campaign_id": campaign_id, "taste_score": taste.score, "profit_metrics": profit_metrics}
             if key and (key not in candidates_by_url or item["score"] > candidates_by_url[key]["score"]):
                 candidates_by_url[key] = item
 
     ranked = sorted(candidates_by_url.values(), key=lambda item: item["score"], reverse=True)
     selected, portfolio_blocked = select_portfolio(ranked, limit=select_limit)
+    record(
+        "candidates_ranked",
+        "Candidates ranked and portfolio selected",
+        {
+            "candidate_count": len(ranked),
+            "early_blocked_count": len(early_blocked),
+            "taste_blocked_count": len(taste_blocked),
+            "portfolio_blocked_count": len(portfolio_blocked),
+            "selected_count": len(selected),
+        },
+    )
     merged_input.write_text("\n".join(_line_for_product(item["product"]) for item in ranked) + ("\n" if ranked else ""), encoding="utf-8")
     selected_input.write_text("\n".join(_line_for_product(item["product"]) for item in selected) + ("\n" if selected else ""), encoding="utf-8")
 
@@ -305,14 +455,39 @@ def run_profit_first_e2e(
         write_converted_input(converted_json, converted_input)
         if converted_input.exists() and converted_input.stat().st_size > 0:
             effective_input = converted_input
+    record("conversion", "Selected products converted or prepared", {"selected_count": len(selected), "conversion_ok_count": conversion.get("ok_count", 0), "conversion_failed_count": conversion.get("failed_count", 0), "effective_input": str(effective_input)})
 
     if not effective_input.exists() or effective_input.stat().st_size == 0:
-        summary = {"ok": False, "reason": "no_effective_input", "batch_key": batch_key, "work_dir": str(work_dir), "sources": source_reports, "candidate_count": len(ranked), "early_blocked_count": len(early_blocked), "top_early_block_reasons": _top_reasons(early_blocked), "taste_blocked_count": len(taste_blocked), "top_taste_block_reasons": _top_taste_reasons(taste_blocked), "portfolio_blocked_count": len(portfolio_blocked), "top_portfolio_block_reasons": _top_portfolio_reasons(portfolio_blocked), "selected_count": len(selected), "conversion": conversion}
+        summary = {"ok": False, "reason": "no_effective_input", "batch_key": batch_key, "work_dir": str(work_dir), "outbox_path": str(outbox_path), "sources": source_reports, "candidate_count": len(ranked), "early_blocked_count": len(early_blocked), "top_early_block_reasons": _top_reasons(early_blocked), "taste_blocked_count": len(taste_blocked), "top_taste_block_reasons": _top_taste_reasons(taste_blocked), "portfolio_blocked_count": len(portfolio_blocked), "top_portfolio_block_reasons": _top_portfolio_reasons(portfolio_blocked), "selected_count": len(selected), "selected_input": str(selected_input), "effective_input": str(effective_input), "conversion": conversion, "queued_messages": 0}
+        if queue_telegram:
+            message = OutboxMessage(
+                id=f"{batch_key}:no-post-digest",
+                kind="digest",
+                text=render_profit_first_e2e(summary),
+            )
+            Outbox(outbox_path).save([message])
+            summary["queued_messages"] = 1
+            summary["queued_digest"] = True
+        else:
+            summary["queued_digest"] = False
+        record("blocked", "Profit-first E2E blocked before approval batch", {"reason": "no_effective_input", "candidate_count": len(ranked), "selected_count": len(selected), "queued_digest": summary["queued_digest"]}, status="blocked")
         (work_dir / "profit-first-e2e-summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return summary
 
     manifest = create_approval_batch(effective_input, drafts_dir, db_path, batch_key=batch_key, limit=select_limit)
+    media_enrichment = enrich_batch_media(db_path, batch_key=batch_key, out_dir=drafts_dir, limit=select_limit)
+    manifest = AffiliPilotDB(db_path).get_batch(batch_key)["manifest"]
     original_posts = list(manifest.get("posts", []))
+    record(
+        "approval_batch_created",
+        "Approval batch created and media enriched",
+        {
+            "original_post_count": len(original_posts),
+            "effective_input": str(effective_input),
+            "media_enrichment_updated": media_enrichment.get("updated", 0),
+            "media_enrichment_failed": media_enrichment.get("failed", 0),
+        },
+    )
     vetted_posts = []
     gates = []
     for post in original_posts:
@@ -341,10 +516,12 @@ def run_profit_first_e2e(
     manifest["selected"] = len(vetted_posts)
     manifest["filtered_posts"] = [p.get("post_id") for p in original_posts if p not in vetted_posts]
     AffiliPilotDB(db_path).save_batch(batch_key=batch_key, source=str(effective_input), manifest=manifest)
+    record("gates_evaluated", "Approval batch gates evaluated", {"vetted_count": len(vetted_posts), "filtered_count": len(original_posts) - len(vetted_posts)})
 
     messages = []
     if queue_telegram and vetted_posts:
         messages = queue_approval_batch(db_path, batch_key=batch_key, outbox_path=outbox_path)
+    record("approval_queued", "Telegram approval queue step completed", {"queued_messages": len(messages), "queue_telegram": queue_telegram})
 
     ready = build_ready_to_publish_report(db_path=db_path, batch_key=batch_key, outbox_path=outbox_path, out_dir=publish_dir)
     summary = {
@@ -363,6 +540,7 @@ def run_profit_first_e2e(
         "portfolio_blocked_count": len(portfolio_blocked),
         "top_portfolio_block_reasons": _top_portfolio_reasons(portfolio_blocked),
         "selected_count": len(selected),
+        "selected_profit_metrics": [{"title": item["product"].title, "url": item["product"].url, "score": item.get("score"), "profit_metrics": item.get("profit_metrics", {})} for item in selected],
         "merged_input": str(merged_input),
         "selected_input": str(selected_input),
         "effective_input": str(effective_input),
@@ -378,6 +556,7 @@ def run_profit_first_e2e(
         "taste_blocked": taste_blocked[:50],
         "portfolio_blocked": _serialize_portfolio_blocked(portfolio_blocked[:50]),
     }
+    record("finished", "Profit-first E2E finished", {"ok": summary["ok"], "reason": summary["reason"], "vetted_count": len(vetted_posts), "queued_messages": len(messages)}, status="finished" if summary["ok"] else "blocked")
     (work_dir / "profit-first-e2e-summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return summary
 
@@ -405,66 +584,64 @@ def _gate_failure_summary(gates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"reason": reason, "count": count} for reason, count in sorted(counts.items(), key=lambda x: x[1], reverse=True)[:10]]
 
 
-def render_profit_first_e2e(summary: dict[str, Any]) -> str:
+def _format_top_reason(items: list[dict[str, Any]]) -> str:
+    if not items:
+        return "-"
+    first = items[0]
+    return f"{first.get('reason', '-')}: {first.get('count', 0)}"
+
+
+def render_profit_first_e2e(summary: dict[str, Any], *, verbose: bool = False) -> str:
     conv = summary.get("conversion", {})
     ready = summary.get("ready_to_publish", {})
     source_lines = [_source_line(s) for s in summary.get("sources", [])]
     gate_failures = _gate_failure_summary(summary.get("gates", []))
     no_card_reasons = []
     if summary.get("candidate_count", 0) == 0:
-        no_card_reasons.append("No candidates after source fetch and early filtering.")
+        no_card_reasons.append("Không còn candidate sau source/filter.")
     if summary.get("early_blocked_count", 0):
-        no_card_reasons.append(f"Early filter blocked {summary.get('early_blocked_count')} risky/invalid products.")
+        no_card_reasons.append(f"Early filter block {summary.get('early_blocked_count')} sản phẩm rủi ro/không hợp lệ.")
     if summary.get("taste_blocked_count", 0):
-        no_card_reasons.append(f"Taste layer blocked {summary.get('taste_blocked_count')} low-fit products.")
+        no_card_reasons.append(f"Taste layer block {summary.get('taste_blocked_count')} sản phẩm low-fit.")
     if summary.get("portfolio_blocked_count", 0):
-        no_card_reasons.append(f"Portfolio selector held back {summary.get('portfolio_blocked_count')} products due category quota/fit.")
+        no_card_reasons.append(f"Portfolio giữ lại {summary.get('portfolio_blocked_count')} sản phẩm do quota/fit.")
     if conv.get("failed_count", 0):
-        no_card_reasons.append(f"Accesstrade conversion failed for {conv.get('failed_count')} selected products.")
+        no_card_reasons.append(f"Convert Accesstrade fail {conv.get('failed_count')} sản phẩm.")
     if gate_failures:
-        no_card_reasons.append(f"Content/quality gates blocked posts: {gate_failures[:3]}")
+        no_card_reasons.append(f"Gate nội dung/chất lượng block: {gate_failures[:3]}")
     if summary.get("vetted_count", 0) > 0 and summary.get("queued_messages", 0) == 0:
-        no_card_reasons.append("Vetted posts exist, but Telegram queue/delivery was skipped or disabled for this run.")
+        no_card_reasons.append("Có vetted posts nhưng chưa queue/deliver Telegram.")
+
+    status = "OK" if summary.get("ok") else "BLOCK"
     lines = [
-        "🐌 AffiliPilot profit-first E2E",
+        f"🐌 AffiliPilot: {status}",
         f"Batch: {summary.get('batch_key')}",
-        f"Status: {'OK' if summary.get('ok') else 'BLOCK'} ({summary.get('reason')})",
-        f"Work dir: {summary.get('work_dir')}",
-        "",
-        "Source health:",
-        *(source_lines or ["- no sources recorded"]),
-        "",
-        "Pipeline:",
-        f"- discovered candidates: {summary.get('candidate_count', 0)}",
-        f"- early blocked: {summary.get('early_blocked_count', 0)}",
-        f"- taste blocked: {summary.get('taste_blocked_count', 0)}",
-        f"- portfolio held back: {summary.get('portfolio_blocked_count', 0)}",
-        f"- selected for conversion/draft: {summary.get('selected_count', 0)}",
-        f"- conversion: ok={conv.get('ok_count', 0)} failed={conv.get('failed_count', 0)} dry_run={conv.get('dry_run')}",
-        f"- vetted: pass={summary.get('vetted_count', 0)} filtered={summary.get('filtered_count', 0)}",
-        f"- outbox queued: {summary.get('queued_messages', 0)}",
-        f"- ready preview: ready={ready.get('ready_count', 0)} held={ready.get('held_count', 0)} publish-safe-pass={ready.get('publish_safe_pass_count', 0)}",
-        "",
-        f"Top early block reasons: {summary.get('top_early_block_reasons', [])[:5]}",
-        f"Top taste block reasons: {summary.get('top_taste_block_reasons', [])[:5]}",
-        f"Top portfolio block reasons: {summary.get('top_portfolio_block_reasons', [])[:5]}",
-        f"Top gate failures: {gate_failures[:5]}",
+        f"Kết quả: {summary.get('selected_count', 0)} chọn / {summary.get('queued_messages', 0)} card / {ready.get('ready_count', 0)} ready",
+        f"Filter: early {summary.get('early_blocked_count', 0)} | taste {summary.get('taste_blocked_count', 0)} | portfolio {summary.get('portfolio_blocked_count', 0)}",
+        f"Lý do chính: {_format_top_reason(summary.get('top_early_block_reasons', []))}; {_format_top_reason(summary.get('top_taste_block_reasons', []))}",
     ]
     if no_card_reasons:
-        heading = "Operator notes:" if summary.get("vetted_count", 0) > 0 else "Why no approval-ready cards:"
-        lines.extend(["", heading, *(f"- {reason}" for reason in no_card_reasons)])
+        lines.append(f"Vì sao chưa có card: {no_card_reasons[0]}")
+    next_action = "Mở outbox để review nếu cần." if summary.get("queued_messages", 0) else "Không cần approve — batch này không có sản phẩm đạt."
+    lines.append(f"Next: {next_action}")
+
+    if not verbose:
+        return "\n".join(lines)
+
     lines.extend([
         "",
-        "Artifacts:",
-        f"- selected input: {summary.get('selected_input')}",
-        f"- effective input: {summary.get('effective_input')}",
-        f"- outbox: {summary.get('outbox_path')}",
-        f"- ready report: {ready.get('report_path')}",
-        "",
-        "Next safe steps:",
-        f"1) Review outbox: python3 -m affilipilot.cli outbox --outbox {summary.get('outbox_path')}",
-        "2) Deliver approval cards to Telegram if queued.",
-        "3) Approve/reject cards.",
-        "4) Run publish-safe --check-only before any real Facebook publish.",
+        "— Chi tiết —",
+        f"Reason: {summary.get('reason')}",
+        f"Work dir: {summary.get('work_dir')}",
+        "Source health:",
+        *(source_lines or ["- no sources recorded"]),
+        f"Conversion: ok={conv.get('ok_count', 0)} failed={conv.get('failed_count', 0)} dry_run={conv.get('dry_run')}",
+        f"Vetted: pass={summary.get('vetted_count', 0)} filtered={summary.get('filtered_count', 0)}",
+        f"Top early: {summary.get('top_early_block_reasons', [])[:5]}",
+        f"Top taste: {summary.get('top_taste_block_reasons', [])[:5]}",
+        f"Top portfolio: {summary.get('top_portfolio_block_reasons', [])[:5]}",
+        f"Top gates: {gate_failures[:5]}",
+        f"Outbox: {summary.get('outbox_path')}",
+        f"Ready report: {ready.get('report_path')}",
     ])
     return "\n".join(lines)

@@ -74,8 +74,48 @@ def _int_money(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
 
+def _discount_rate(item: dict[str, Any]) -> float | None:
+    value = item.get("discount_rate")
+    try:
+        if value in (None, ""):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sale_price(item: dict[str, Any]) -> int | None:
+    """Return the actual sale price.
+
+    Official Accesstrade datafeeds define:
+    - `price`: original/list price
+    - `discount`: sale price after discount
+    - `discount_amount`: amount reduced
+    - `discount_rate`: percent reduced
+
+    Some observed Shopee rows use `discount=30` while `discount_amount` nearly
+    equals `price`, meaning `discount` is effectively a percent. Keep this as a
+    compatibility fallback after the official semantics.
+    """
+    price = _int_money(item.get("price"))
+    discount = _int_money(item.get("discount"))
+    discount_amount = _int_money(item.get("discount_amount"))
+    discount_rate = _discount_rate(item)
+    if discount and price:
+        if 0 < discount <= 100 and discount_amount and discount_amount >= max(1, price - discount - 1):
+            return max(0, int(round(price * (100 - discount) / 100)))
+        if discount >= 1_000 or discount < price:
+            return discount
+        return discount
+    if price and discount_rate and 0 < discount_rate <= 100:
+        return max(0, int(round(price * (100 - discount_rate) / 100)))
+    if price and discount_amount and 0 < discount_amount < price:
+        return max(0, price - discount_amount)
+    return discount or price
+
 def _product_from_item(item: dict[str, Any], *, source: str) -> AccesstradeProduct:
     price = _int_money(item.get("price"))
+    sale_price = _sale_price(item)
     discount = _int_money(item.get("discount"))
     category = str(item.get("category_name") or item.get("cate") or item.get("product_category") or "unknown")
     return AccesstradeProduct(
@@ -83,7 +123,7 @@ def _product_from_item(item: dict[str, Any], *, source: str) -> AccesstradeProdu
         title=str(item.get("name") or item.get("title") or ""),
         category=category,
         price_vnd=price,
-        discount_vnd=discount,
+        discount_vnd=sale_price,
         discount_rate=float(item.get("discount_rate")) if item.get("discount_rate") not in (None, "") else None,
         image_url=str(item.get("image") or item.get("image_url") or ""),
         affiliate_url=str(item.get("aff_link") or item.get("prod_link") or ""),
@@ -93,12 +133,13 @@ def _product_from_item(item: dict[str, Any], *, source: str) -> AccesstradeProdu
         raw=item,
     )
 
-def fetch_datafeeds(*, config: AccesstradeConfig | None = None, campaign: str = "", domain: str = "", status_discount: str = "", discount_rate_from: str = "", price_from: str = "", price_to: str = "", page: int = 1, limit: int = 50, timeout: int = 30) -> dict[str, Any]:
+def fetch_datafeeds(*, config: AccesstradeConfig | None = None, campaign: str = "", domain: str = "", status_discount: str = "", discount_rate_from: str = "", discount_rate_to: str = "", discount_amount_from: str = "", discount_amount_to: str = "", discount_from: str = "", discount_to: str = "", price_from: str = "", price_to: str = "", update_from: str = "", update_to: str = "", page: int = 1, limit: int = 50, timeout: int = 30) -> dict[str, Any]:
     config = config or AccesstradeConfig.from_env()
     if not config.token:
         return {"ok": False, "error": "missing_ACCESSTRADE_TOKEN", "products": []}
+    limit = max(1, min(int(limit), 200))
     params = {"page": str(page), "limit": str(limit)}
-    for key, value in {"campaign": campaign, "domain": domain, "status_discount": status_discount, "discount_rate_from": discount_rate_from, "price_from": price_from, "price_to": price_to}.items():
+    for key, value in {"campaign": campaign, "domain": domain, "status_discount": status_discount, "discount_rate_from": discount_rate_from, "discount_rate_to": discount_rate_to, "discount_amount_from": discount_amount_from, "discount_amount_to": discount_amount_to, "discount_from": discount_from, "discount_to": discount_to, "price_from": price_from, "price_to": price_to, "update_from": update_from, "update_to": update_to}.items():
         if value not in (None, ""):
             params[key] = str(value)
     url = f"{config.base_url.rstrip('/')}/v1/datafeeds?{urllib.parse.urlencode(params)}"

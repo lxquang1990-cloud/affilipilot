@@ -28,6 +28,22 @@ def test_datafeed_product_to_input(tmp_path):
     assert "media_source=accesstrade_api" in text
 
 
+def test_datafeed_product_computes_sale_price_from_percent_discount():
+    item = {
+        "url": "https://shopee.vn/product/123/456",
+        "name": "Kệ đựng mỹ phẩm 4 tầng",
+        "price": 250000,
+        "discount": 30.0,
+        "discount_amount": 249970.0,
+        "discount_rate": 1.0,
+        "image": "https://cdn.example/k.jpg",
+        "merchant": "shopee",
+    }
+    product = _product_from_item(item, source="accesstrade_datafeed")
+    assert product.price_vnd == 250000
+    assert product.discount_vnd == 175000
+
+
 def test_fetch_datafeeds_uses_only_documented_params(monkeypatch):
     seen = {}
     def fake_request_json(url, *, token, timeout=30):

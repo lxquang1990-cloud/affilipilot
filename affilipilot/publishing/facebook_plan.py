@@ -108,6 +108,9 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
         )
         quality = evaluate_quality_gate(post)
         market_fit = evaluate_market_fit(post.get("product", {}), text)
+        # Operator policy 2026-05-24: page-audience fit is advisory only.
+        # Keep content/market/media/offer/approval gates hard, but do not block
+        # publishing solely because a product is low-fit for the configured Page.
         page_fit = evaluate_page_audience_fit(post.get("product", {}), page_name=config.page_name)
         offer_url = post.get("product", {}).get("tracking_url") or post.get("product", {}).get("affiliate_url") or post.get("product", {}).get("url", "")
         offer = validate_offer(offer_url, expected_title=post.get("product", {}).get("title", ""), network=False)
@@ -122,7 +125,7 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
         if not visible_link_for_post(product) and not test_facebook_config:
             reasons.append("missing_real_short_link")
         reasons.extend(f"market_fit:{reason}" for reason in market_fit.reasons if f"market_fit:{reason}" not in reasons)
-        reasons.extend(f"page_audience_fit:{reason}" for reason in page_fit.reasons if f"page_audience_fit:{reason}" not in reasons)
+        # Audience-fit reasons are intentionally not added to hard block reasons.
         reasons.extend(f"offer:{reason}" for reason in offer.reasons if f"offer:{reason}" not in reasons)
 
         files = post.get("files", {})
@@ -142,7 +145,7 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
         media_gate = evaluate_publish_media_gate(post, strategy=strategy, restriction=restrictions)
         reasons.extend(reason for reason in media_gate.reasons if reason not in reasons)
 
-        if gate.allowed and quality.passed and market_fit.passed and page_fit.passed and offer.passed and media_gate.passed and "duplicate_text" not in reasons and "caption_too_long_for_facebook" not in reasons and "missing_real_short_link" not in reasons and "video_available_but_not_publish_ready" not in reasons and "video_path_not_found" not in reasons:
+        if gate.allowed and quality.passed and market_fit.passed and offer.passed and media_gate.passed and "duplicate_text" not in reasons and "caption_too_long_for_facebook" not in reasons and "missing_real_short_link" not in reasons and "video_available_but_not_publish_ready" not in reasons and "video_path_not_found" not in reasons:
             graph = build_graph_payload(page_id=config.page_id, message=text, link=_post_link(post), image_path=files.get("image", ""), image_paths=files.get("images", [])[:restrictions.image_max_count], video_path=video_path, publish_type=strategy.publish_type)
             plans.append(FacebookPostPlan(
                 post_id=post_id,

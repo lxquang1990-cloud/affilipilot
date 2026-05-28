@@ -16,6 +16,16 @@ def test_parse_approval_command():
     assert parsed.args["post_id"] == "post_20260516_001"
 
 
+def test_parse_quick_approval_reply():
+    parsed = parse_telegram_text("ok")
+    assert parsed.intent == TelegramIntent.APPROVE
+    assert parsed.args["post_id"] == "latest"
+
+    parsed = parse_telegram_text("sửa")
+    assert parsed.intent == TelegramIntent.NEEDS_EDIT
+    assert parsed.args["post_id"] == "latest"
+
+
 def test_adapter_create_status_and_approve(tmp_path):
     config = AdapterConfig(db_path=tmp_path / "affilipilot.db", work_dir=tmp_path / "work", limit=1)
     result = handle_text_message("https://shopee.vn/a | title=Giỏ sắp xếp đồ bé tiện gọn | category=storage | price=129000 | image_url=https://cdn.example/storage.jpg", config)
@@ -33,8 +43,9 @@ def test_adapter_create_status_and_approve(tmp_path):
 
     import re
     post_id = re.search(r"post_[^\s:]+", status.text).group(0)
-    approve = handle_text_message(f"/aff_approve {post_id} ok", config)
+    approve = handle_text_message("ok", config)
     assert "approved" in approve.text
+    assert post_id in approve.text
 
 
 def test_adapter_queues_telegram_outbox_for_raw_links(tmp_path):

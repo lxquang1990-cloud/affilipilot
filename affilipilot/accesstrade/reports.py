@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
@@ -34,9 +35,23 @@ def _request_json(url: str, *, token: str, timeout: int = 30) -> dict[str, Any]:
         body = resp.read().decode("utf-8", errors="replace")
         return json.loads(body) if body else {}
 
+_ORDER_LIST_CACHE: dict[tuple[str, str, str, str, int, int], tuple[float, dict[str, Any]]] = {}
+_LAST_LIMITED_REQUEST_AT = 0.0
+
+
 def _list(response: dict[str, Any]) -> list[dict[str, Any]]:
     data = response.get("data")
     return [x for x in data if isinstance(x, dict)] if isinstance(data, list) else []
+
+
+def _rate_limit_pause() -> None:
+    """Respect Accesstrade 10 requests/minute reporting endpoints."""
+    global _LAST_LIMITED_REQUEST_AT
+    now = time.monotonic()
+    wait = 6.0 - (now - _LAST_LIMITED_REQUEST_AT)
+    if wait > 0:
+        time.sleep(wait)
+    _LAST_LIMITED_REQUEST_AT = time.monotonic()
 
 def fetch_order_list(*, config: AccesstradeConfig | None = None, since: str, until: str, merchant: str = "", status: str = "", page: int = 1, limit: int = 300, timeout: int = 30) -> dict[str, Any]:
     config = config or AccesstradeConfig.from_env()
@@ -48,7 +63,14 @@ def fetch_order_list(*, config: AccesstradeConfig | None = None, since: str, unt
     if status:
         params["status"] = status
     url = f"{config.base_url.rstrip('/')}/v1/order-list?{urllib.parse.urlencode(params)}"
-    response = _request_json(url, token=config.token, timeout=timeout)
+    cache_key = (since, until, merchant, status, int(page), int(limit))
+    cached = _ORDER_LIST_CACHE.get(cache_key)
+    if cached and time.monotonic() - cached[0] < 60:
+        response = cached[1]
+    else:
+        _rate_limit_pause()
+        response = _request_json(url, token=config.token, timeout=timeout)
+        _ORDER_LIST_CACHE[cache_key] = (time.monotonic(), response)
     orders = []
     for item in _list(response):
         orders.append(AccesstradeOrder(

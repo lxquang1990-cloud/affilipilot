@@ -10,6 +10,7 @@ from typing import Any
 
 from affilipilot.media import fetch_image, prepare_product_media_gallery
 from affilipilot.video_media import prepare_product_video
+from affilipilot.marketplaces.shopee_public_api import get_product_detail, parse_shopee_ids
 from affilipilot.scanner.core import fetch_html, parse_products_from_html
 
 IMAGE_EXT_RE = re.compile(r'https?://[^"\'\s<>]+?\.(?:jpg|jpeg|png|webp)(?:\?[^"\'\s<>]*)?', re.I)
@@ -61,7 +62,7 @@ def harvest_image_urls(html_text: str, *, title: str = "", limit: int = 10) -> l
 
 def _is_shopee_product_url(url: str) -> bool:
     host = urlparse(url).netloc.lower()
-    return "shopee." in host and bool(SHOPEE_PRODUCT_RE.search(urlparse(url).path))
+    return "shopee." in host and bool(parse_shopee_ids(url) or SHOPEE_PRODUCT_RE.search(urlparse(url).path))
 
 def _shopee_image_url(image_id: str) -> str:
     return f"https://down-vn.img.susercontent.com/file/{image_id}"
@@ -91,13 +92,41 @@ def extract_shopee_product_media(html_text: str, *, limit: int = 12) -> dict[str
         if len(image_ids) >= limit:
             break
     video_urls = []
-    for match in re.finditer(r'"url"\s*:\s*"(https?://[^"\\]+?\.mp4[^"\\]*)"', html_text):
+    for match in re.finditer(r'"(?:url|video_url)"\s*:\s*"(https?://[^"\\]+?\.mp4[^"\\]*)"', html_text):
+        url = match.group(1).replace("\\/", "/")
+        if url not in video_urls:
+            video_urls.append(url)
+    for match in re.finditer(r'"default_format"\s*:\s*\{[^{}]{0,1000}"url"\s*:\s*"(https?://[^"\\]+?\.mp4[^"\\]*)"', html_text):
         url = match.group(1).replace("\\/", "/")
         if url not in video_urls:
             video_urls.append(url)
     return {
         "image_urls": [_shopee_image_url(image_id) for image_id in image_ids[:limit]],
         "video_urls": video_urls[:3],
+    }
+
+
+def enrich_shopee_public_api_media(url: str) -> dict[str, Any]:
+    """Best-effort live Shopee detail enrichment for gallery/video.
+
+    Shopee sometimes blocks this endpoint from server IPs; callers should treat
+    failures as non-fatal and fall back to PDP HTML/Accesstrade media.
+    """
+    ids = parse_shopee_ids(url)
+    if not ids:
+        return {"image_urls": [], "video_urls": [], "price_vnd": None, "error": "missing_shopee_ids"}
+    try:
+        product = get_product_detail(ids[0], ids[1], timeout=30)
+    except Exception as exc:  # noqa: BLE001
+        return {"image_urls": [], "video_urls": [], "price_vnd": None, "error": type(exc).__name__}
+    if not product:
+        return {"image_urls": [], "video_urls": [], "price_vnd": None, "error": "not_found"}
+    return {
+        "image_urls": product.image_urls,
+        "video_urls": product.video_urls,
+        "price_vnd": product.price_vnd,
+        "media_source": "shopee_public_api",
+        "media_confidence": "official",
     }
 
 def _normalize_lazada_media_url(url: str) -> str:
@@ -170,7 +199,9 @@ def harvest_lazada_product_urls(html_text: str, *, limit: int = 20) -> list[str]
 
 
 def enrich_product_from_url(url: str, *, title: str = "", category: str = "unknown", source: str = "AUTO", timeout: int = 30) -> dict[str, Any]:
+    shopee_api_media: dict[str, Any] = {}
     if _is_shopee_product_url(url):
+        shopee_api_media = enrich_shopee_public_api_media(url)
         req = urllib.request.Request(
             url,
             headers={
@@ -187,15 +218,21 @@ def enrich_product_from_url(url: str, *, title: str = "", category: str = "unkno
     product = items[0].__dict__ if items else {"url": url, "title": title, "category": category, "source": source, "image_url": ""}
     if _is_shopee_product_url(url):
         media = extract_shopee_product_media(html, limit=12)
-        if media.get("image_urls"):
-            product["image_url"] = media["image_urls"][0]
-            product["image_urls"] = media["image_urls"]
-            product.setdefault("raw", {})["shopee_media"] = media
-            product["media_source"] = "shopee_pdp"
-            product["media_confidence"] = "official"
+        image_urls = shopee_api_media.get("image_urls") or media.get("image_urls")
+        video_urls = shopee_api_media.get("video_urls") or media.get("video_urls")
+        if shopee_api_media.get("price_vnd"):
+            product["price_vnd"] = shopee_api_media["price_vnd"]
+        if image_urls:
+            product["image_url"] = image_urls[0]
+            product["image_urls"] = image_urls
+            product.setdefault("raw", {})["shopee_media"] = {"pdp": media, "api": shopee_api_media}
+            product["media_source"] = shopee_api_media.get("media_source") or "shopee_pdp"
+            product["media_confidence"] = shopee_api_media.get("media_confidence") or "official"
             product["notes"] = (product.get("notes", "") + ";shopee_product_media").strip(";")
-        if media.get("video_urls"):
-            product["video_urls"] = media["video_urls"]
+        if video_urls:
+            product["video_urls"] = video_urls
+            product["video_url"] = video_urls[0]
+            product["notes"] = (product.get("notes", "") + ";shopee_product_video").strip(";")
     elif "lazada." in urlparse(url).netloc.lower():
         media = extract_lazada_product_media(html, limit=12)
         if media.get("image_urls"):
@@ -235,7 +272,10 @@ def enrich_batch_media(db_path: str | Path, *, batch_key: str, out_dir: str | Pa
         prod = post.get("product", {})
         post_id = post.get("post_id", "post")
         existing_images = post.get("files", {}).get("images") or []
-        if (prod.get("image_path") or post.get("files", {}).get("image") or post.get("media", {}).get("ok")) and (existing_images or not prod.get("image_urls")):
+        has_video_file = bool(prod.get("video_path") or post.get("files", {}).get("video"))
+        has_video_url = bool(prod.get("video_url") or prod.get("video_urls"))
+        needs_video_probe = _is_shopee_product_url(prod.get("original_url") or prod.get("url", "")) and not (has_video_file or has_video_url)
+        if (not needs_video_probe) and (prod.get("image_path") or post.get("files", {}).get("image") or post.get("media", {}).get("ok")) and (existing_images or not prod.get("image_urls")):
             results.append({"post_id": post_id, "status": "already_has_media"})
             continue
         image_url = prod.get("image_url", "")
@@ -244,16 +284,20 @@ def enrich_batch_media(db_path: str | Path, *, batch_key: str, out_dir: str | Pa
             has_bad_media = any(hint in f"{image_url} {prod.get('image_path', '')}".lower() for hint in BAD_MEDIA_NAME_HINTS)
         except Exception:  # noqa: BLE001
             has_bad_media = False
-        if not image_url or has_bad_media:
+        if not image_url or has_bad_media or needs_video_probe:
             try:
                 enriched = enrich_product_from_url(prod.get("original_url") or prod.get("url", ""), title=prod.get("title", ""), category=prod.get("category", "unknown"), source="AUTO")
-                image_url = enriched.get("image_url", "")
+                image_url = enriched.get("image_url", "") or image_url
                 if image_url:
                     prod["image_url"] = image_url
                     prod["image_urls"] = enriched.get("image_urls") or prod.get("image_urls", [])
                     prod["media_source"] = enriched.get("media_source") or ("shopee_pdp" if "shopee_product_media" in enriched.get("notes", "") else prod.get("media_source", ""))
                     prod["media_confidence"] = enriched.get("media_confidence") or ("official" if prod.get("media_source") == "shopee_pdp" else prod.get("media_confidence", ""))
+                if enriched.get("price_vnd"):
+                    prod["price_vnd"] = enriched["price_vnd"]
+                if enriched.get("video_urls"):
                     prod["video_urls"] = enriched.get("video_urls") or prod.get("video_urls", [])
+                    prod["video_url"] = prod["video_urls"][0] if prod["video_urls"] else prod.get("video_url", "")
             except Exception as exc:
                 results.append({"post_id": post_id, "status": "enrich_failed", "reason": type(exc).__name__})
         media_dir = out_dir / "media" / post_id
