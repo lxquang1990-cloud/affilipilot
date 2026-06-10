@@ -83,3 +83,68 @@ def test_enrich_batch_media_downloads_existing_image_url(tmp_path, monkeypatch):
     con = sqlite3.connect(db)
     updated = json.loads(con.execute("select manifest_json from batches where batch_key='batch'").fetchone()[0])
     assert updated["posts"][0]["media"]["ok"] is True
+
+
+def test_enrich_batch_media_probes_shopee_gallery_when_provider_has_only_thumbnail(tmp_path, monkeypatch):
+    import affilipilot.scanner.enrich as enrich
+    from affilipilot.media import MediaResult
+
+    db = tmp_path / "db.sqlite"
+    con = sqlite3.connect(db)
+    con.execute("create table batches (batch_key text primary key, manifest_json text not null)")
+    manifest = {
+        "posts": [
+            {
+                "post_id": "post_1",
+                "product": {
+                    "title": "Máy xay mini",
+                    "url": "https://go.isclix.com/deep_link/x?url=https%3A%2F%2Fshopee.vn%2Fproduct%2F371008594%2F3988083571",
+                    "original_url": "https://shopee.vn/product/371008594/3988083571",
+                    "image_url": "https://down-vn.img.susercontent.com/file/thumb-only",
+                    "image_urls": [],
+                },
+                "files": {},
+                "media": {},
+            }
+        ]
+    }
+    con.execute("insert into batches values (?,?)", ("batch", json.dumps(manifest)))
+    con.commit(); con.close()
+
+    def fake_enrich_product_from_url(url, title="", category="unknown", source="MANUAL"):
+        assert url == "https://shopee.vn/product/371008594/3988083571"
+        return {
+            "image_url": "https://down-vn.img.susercontent.com/file/gallery-1",
+            "image_urls": [
+                "https://down-vn.img.susercontent.com/file/gallery-1",
+                "https://down-vn.img.susercontent.com/file/gallery-2",
+                "https://down-vn.img.susercontent.com/file/gallery-3",
+            ],
+            "notes": "shopee_product_media",
+            "media_source": "shopee_pdp",
+            "media_confidence": "official",
+        }
+
+    def fake_prepare_product_media_gallery(product, media_dir):
+        return [
+            MediaResult(ok=True, local_path=str(tmp_path / "gallery-1.jpg"), media_type="jpeg", reasons=[]),
+            MediaResult(ok=True, local_path=str(tmp_path / "gallery-2.jpg"), media_type="jpeg", reasons=[]),
+            MediaResult(ok=True, local_path=str(tmp_path / "gallery-3.jpg"), media_type="jpeg", reasons=[]),
+        ]
+
+    monkeypatch.setattr(enrich, "enrich_product_from_url", fake_enrich_product_from_url)
+    monkeypatch.setattr(enrich, "prepare_product_media_gallery", fake_prepare_product_media_gallery)
+
+    summary = enrich_batch_media(db, batch_key="batch", out_dir=tmp_path / "out")
+
+    assert summary["updated"] == 1
+    con = sqlite3.connect(db)
+    updated = json.loads(con.execute("select manifest_json from batches where batch_key='batch'").fetchone()[0])
+    post = updated["posts"][0]
+    assert post["product"]["image_urls"] == [
+        "https://down-vn.img.susercontent.com/file/gallery-1",
+        "https://down-vn.img.susercontent.com/file/gallery-2",
+        "https://down-vn.img.susercontent.com/file/gallery-3",
+    ]
+    assert len(post["files"]["images"]) == 3
+    assert post["media"]["gallery_count"] == 3

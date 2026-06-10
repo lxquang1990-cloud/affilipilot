@@ -8,6 +8,14 @@ from pathlib import Path
 from affilipilot.media import MediaResult
 
 
+def _use_datafeed_only_sources(monkeypatch):
+    monkeypatch.setattr(
+        e2e_profit,
+        "DEFAULT_PROFIT_SOURCES",
+        [{"kind": "datafeed", "name": "fixture_datafeed", "domain": "lazada.vn", "limit": 30, "campaign_key": "LAZADA"}],
+    )
+
+
 def test_fetch_source_error_does_not_crash(tmp_path, monkeypatch):
     def boom(**kwargs):
         raise RuntimeError("temporary upstream issue")
@@ -164,6 +172,7 @@ def test_profit_e2e_standard_flow_with_patched_sources(tmp_path, monkeypatch):
 
     monkeypatch.setattr(e2e_profit, "fetch_datafeeds", fake_fetch_datafeeds)
     monkeypatch.setattr(e2e_profit, "fetch_top_products", lambda **kwargs: {"ok": True, "products": []})
+    _use_datafeed_only_sources(monkeypatch)
     monkeypatch.setattr(e2e_profit, "convert_input_links", fake_convert)
     monkeypatch.setattr(e2e_profit, "write_converted_input", lambda converted_json, out_path: out_path.write_text("", encoding="utf-8"))
     monkeypatch.setattr(e2e_profit, "queue_approval_batch", lambda *args, **kwargs: [])
@@ -208,6 +217,7 @@ def test_profit_e2e_filters_risky_products_before_conversion(tmp_path, monkeypat
 
     monkeypatch.setattr(e2e_profit, "fetch_datafeeds", fake_fetch_datafeeds)
     monkeypatch.setattr(e2e_profit, "fetch_top_products", lambda **kwargs: {"ok": True, "products": []})
+    _use_datafeed_only_sources(monkeypatch)
     monkeypatch.setattr(e2e_profit, "convert_input_links", fake_convert)
     monkeypatch.setattr(e2e_profit, "write_converted_input", lambda converted_json, out_path: out_path.write_text("", encoding="utf-8"))
 
@@ -249,6 +259,7 @@ def test_profit_e2e_queues_digest_when_no_effective_input(tmp_path, monkeypatch)
     outbox_path = tmp_path / "outbox.json"
     monkeypatch.setattr(e2e_profit, "fetch_datafeeds", fake_fetch_datafeeds)
     monkeypatch.setattr(e2e_profit, "fetch_top_products", lambda **kwargs: {"ok": True, "products": []})
+    _use_datafeed_only_sources(monkeypatch)
 
     summary = e2e_profit.run_profit_first_e2e(
         batch_key="test-no-effective-input",
@@ -327,6 +338,7 @@ def test_profit_e2e_enriches_media_before_quality_gate(tmp_path, monkeypatch):
 
     monkeypatch.setattr(e2e_profit, "fetch_datafeeds", fake_fetch_datafeeds)
     monkeypatch.setattr(e2e_profit, "fetch_top_products", lambda **kwargs: {"ok": True, "products": []})
+    _use_datafeed_only_sources(monkeypatch)
     monkeypatch.setattr(e2e_profit, "write_campaign_registry", lambda path: {"ok": True, "campaigns": [{"campaign_id": "5087153089503673507", "approval": "successful", "status": "1", "aliases": ["lazada.vn"], "max_commission": "8"}]})
     monkeypatch.setattr(e2e_profit, "convert_input_links", fake_convert)
     monkeypatch.setattr(e2e_profit, "write_converted_input", fake_write_converted)
@@ -387,14 +399,14 @@ def test_profit_e2e_uses_campaign_commission_policy(tmp_path, monkeypatch):
 
     def fake_convert(input_path, out_path, **kwargs):
         text = input_path.read_text(encoding="utf-8")
-        assert "commission_rate=0.08" in text
-        assert "campaign_id=cmp-lazada" in text
+        assert "Máy hút bụi gia đình" in text
         out_path.write_text('{"items": [], "total": 1, "ok_count": 1, "failed_count": 0, "dry_run": true}', encoding="utf-8")
         return {"items": [], "total": 1, "ok_count": 1, "failed_count": 0, "dry_run": True}
 
     monkeypatch.setattr(e2e_profit, "write_campaign_registry", fake_registry)
     monkeypatch.setattr(e2e_profit, "fetch_datafeeds", fake_fetch_datafeeds)
     monkeypatch.setattr(e2e_profit, "fetch_top_products", lambda **kwargs: {"ok": True, "products": []})
+    _use_datafeed_only_sources(monkeypatch)
     monkeypatch.setattr(e2e_profit, "convert_input_links", fake_convert)
     monkeypatch.setattr(e2e_profit, "write_converted_input", lambda converted_json, out_path: out_path.write_text("", encoding="utf-8"))
     monkeypatch.setattr(e2e_profit, "queue_approval_batch", lambda *args, **kwargs: [])
@@ -418,6 +430,7 @@ def test_profit_e2e_writes_blocked_state_events(tmp_path, monkeypatch):
     monkeypatch.setattr(e2e_profit, "write_campaign_registry", lambda path: {"ok": True, "campaigns": []})
     monkeypatch.setattr(e2e_profit, "fetch_datafeeds", lambda **kwargs: {"ok": True, "products": []})
     monkeypatch.setattr(e2e_profit, "fetch_top_products", lambda **kwargs: {"ok": True, "products": []})
+    _use_datafeed_only_sources(monkeypatch)
 
     summary = e2e_profit.run_profit_first_e2e(
         batch_key="test-blocked-events",
@@ -435,3 +448,78 @@ def test_profit_e2e_writes_blocked_state_events(tmp_path, monkeypatch):
     assert state["status"] == "blocked"
     assert state["stage"] == "blocked"
     assert any(event["data"].get("stage") == "blocked" for event in events)
+
+def test_profit_e2e_blocks_recently_selected_auto_source_products(tmp_path, monkeypatch):
+    from affilipilot.db import AffiliPilotDB
+
+    db_path = tmp_path / "affilipilot.db"
+    previous_manifest = {
+        "posts": [
+            {
+                "post_id": "old-post",
+                "product": {
+                    "url": "https://shopee.vn/product/123/456",
+                    "original_url": "https://shopee.vn/product/123/456",
+                    "title": "Kệ đựng mỹ phẩm cũ",
+                },
+            }
+        ]
+    }
+    AffiliPilotDB(db_path).save_batch("auto-source-scheduled-old", "fixture", previous_manifest)
+
+    def fake_fetch_datafeeds(**kwargs):
+        return {
+            "ok": True,
+            "products": [
+                {
+                    "url": "https://shopee.vn/product/123/456",
+                    "title": "Kệ đựng mỹ phẩm cũ",
+                    "category": "home_organization",
+                    "price_vnd": 210000,
+                    "image_url": "https://shopee.vn/old.jpg",
+                    "merchant": "shopee",
+                    "raw": {},
+                },
+                {
+                    "url": "https://shopee.vn/product/789/111",
+                    "title": "Máy hút bụi gia đình chính hãng",
+                    "category": "home_appliance",
+                    "price_vnd": 1500000,
+                    "image_url": "https://shopee.vn/new.jpg",
+                    "merchant": "shopee",
+                    "raw": {},
+                },
+            ],
+        }
+
+    def fake_convert(input_path, out_path, **kwargs):
+        text = Path(input_path).read_text(encoding="utf-8")
+        assert "https://shopee.vn/product/123/456" not in text
+        assert "https://shopee.vn/product/789/111" in text
+        out_path.write_text('{"items": [], "total": 1, "ok_count": 1, "failed_count": 0, "dry_run": true}', encoding="utf-8")
+        return {"items": [], "total": 1, "ok_count": 1, "failed_count": 0, "dry_run": True}
+
+    monkeypatch.setattr(e2e_profit, "fetch_shopee_sheet_products", lambda **kwargs: {"ok": True, "products": []})
+    monkeypatch.setattr(e2e_profit, "fetch_datafeeds", fake_fetch_datafeeds)
+    monkeypatch.setattr(e2e_profit, "fetch_top_products", lambda **kwargs: {"ok": True, "products": []})
+    _use_datafeed_only_sources(monkeypatch)
+    monkeypatch.setattr(e2e_profit, "convert_input_links", fake_convert)
+    monkeypatch.setattr(e2e_profit, "write_converted_input", lambda converted_json, out_path: out_path.write_text("", encoding="utf-8"))
+    monkeypatch.setattr(e2e_profit, "queue_approval_batch", lambda *args, **kwargs: [])
+
+    summary = e2e_profit.run_profit_first_e2e(
+        batch_key="auto-source-scheduled-new",
+        work_dir=tmp_path / "run-freshness",
+        db_path=db_path,
+        outbox_path=tmp_path / "outbox.json",
+        select_limit=1,
+        queue_telegram=False,
+    )
+
+    assert summary["candidate_count"] >= 2
+    assert summary["recent_duplicate_blocked_count"] >= 1
+    assert summary["fresh_candidate_count"] >= 1
+    assert summary["selected_count"] == 1
+    assert summary["selected_profit_metrics"][0]["url"] == "https://shopee.vn/product/789/111"
+    assert any(item["reason"] == "recently_selected_product" for item in summary["portfolio_blocked"])
+

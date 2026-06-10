@@ -112,6 +112,36 @@ Operational notes:
 - Approval cards should be sent only after content gates, media gates, affiliate-link safety, and publish metadata pass.
 - If PDP enrichment finds only thumbnails/static app assets, hold the item instead of publishing weak media.
 
+## Scheduled profit E2E workflow
+
+The scheduled queue wrapper is `scripts/scheduled_e2e_queue.sh`. It runs the profit-first E2E pipeline, writes a batch-specific outbox, and then sends the summary/cards through the Telegram bot delivery path.
+
+Current scheduled command shape:
+
+```bash
+python3 -m affilipilot profit-e2e \
+  --batch-key "auto-source-scheduled-<YYYYMMDD>-<HHMM>" \
+  --work-dir "data/runs/<batch>" \
+  --db data/affilipilot.db \
+  --outbox "data/outbox/<batch>.json" \
+  --discover-limit 80 \
+  --limit 3 \
+  --real-accesstrade
+```
+
+Source coverage rules:
+
+- Default Shopee sheet sources include best sellers, major programs, and brand bonus before fallback marketplace/datafeed sources.
+- Shopee sheet sources use `data/source-cursors.json` to rotate offsets per source. This prevents every scheduled/manual run from repeatedly scanning only the top rows.
+- Google Sheet fetching first tries `/export?format=csv&gid=...`; if Google returns an export error, it falls back to `/gviz/tq?tqx=out:csv&gid=...`.
+- Manual test batches named `manual-e2e-...` also use the recent-selected duplicate filter, so repeated manual runs avoid selecting the same products.
+
+Publish behavior:
+
+- Approval quick replies must publish from the batch-scoped directory `data/publish/telegram/<batch-key>/`, not from shared stale plans.
+- Facebook Reels plans can fall back to Page video posts when Graph requires the multi-step Reels `upload_phase` flow. Image comments are attempted after the primary video succeeds.
+- Operator overrides should be recorded in publish lifecycle events with a clear reason; normal publish-safe gates should not be bypassed silently.
+
 ## Caption/disclosure policy
 
 Generated captions should be product/category-aware, not generic template copy. Avoid broad checklist dumps such as:

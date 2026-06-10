@@ -233,11 +233,11 @@ def publish_reel_post(*, description: str, video_path: str, link: str = "", conf
         raise RuntimeError("Refusing to publish missing reel video file")
     if not description.strip():
         raise RuntimeError("Refusing to publish empty reel description")
-    endpoint = f"https://graph.facebook.com/v19.0/{config.page_id}/reels"
+    endpoint = f"https://graph.facebook.com/v19.0/{config.page_id}/video_reels"
     caption_link = _caption_link(link)
     description_text = description + (f"\n\nLink sản phẩm: {caption_link}" if caption_link else "")
     result = _multipart_post(endpoint, fields={"description": description_text, "access_token": config.page_access_token}, files=[("source", path)], timeout=timeout)
-    return {**result, "endpoint": f"/{config.page_id}/reels"}
+    return {**result, "endpoint": f"/{config.page_id}/video_reels"}
 
 def reply_to_comment(*, comment_id: str, message: str, config: FacebookConfig | None = None, timeout: int = 30) -> dict[str, Any]:
     """Reply to a Facebook comment. Caller must require operator approval."""

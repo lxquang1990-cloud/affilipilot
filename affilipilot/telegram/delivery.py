@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import subprocess
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Callable, Any
 
 from affilipilot.db import AffiliPilotDB
 from affilipilot.telegram.outbox import Outbox, OutboxMessage
+from affilipilot.config import load_env_file
 
 
 def deliver_outbox_dry_run(outbox_path: str | Path, *, mark_sent: bool = False, mark_delivered: bool = False, receipt: str = "", limit: int | None = None) -> dict:
@@ -209,6 +213,91 @@ def send_openclaw_telegram_outbox(
         "messages": results,
     }
 
+
+
+def _load_telegram_bot_config(secret_path: str | Path = "") -> tuple[str, str]:
+    env_file = load_env_file(secret_path) if secret_path else load_env_file()
+    token = os.environ.get("TELEGRAM_BOT_TOKEN") or env_file.get("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID") or env_file.get("TELEGRAM_CHAT_ID", "")
+    return token.strip(), chat_id.strip()
+
+def _telegram_bot_send(token: str, chat_id: str, text: str, *, timeout: int = 60) -> dict[str, Any]:
+    if not token or not chat_id:
+        raise ValueError("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID")
+    data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode("utf-8")
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/sendMessage",
+        data=data,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        payload = json.loads(resp.read().decode("utf-8"))
+    return payload
+
+def send_telegram_bot_outbox(
+    outbox_path: str | Path,
+    *,
+    secret_path: str | Path = "",
+    chat_id: str = "",
+    limit: int = 1,
+    sender: Callable[..., Any] | None = None,
+) -> dict:
+    """Send pending outbox messages through a project-local Telegram bot token.
+
+    Secrets are loaded from env/AffiliPilot secret file and are never returned in
+    reports. Messages are marked delivered only after Telegram returns ok+message_id.
+    """
+    if limit < 1:
+        raise ValueError("limit must be >= 1")
+    token, default_chat_id = _load_telegram_bot_config(secret_path)
+    target_chat = str(chat_id or default_chat_id).strip()
+    if not token or not target_chat:
+        raise ValueError("Missing Telegram bot token/chat config")
+    outbox = Outbox(outbox_path)
+    pending = outbox.pending()
+    selected = pending[:limit]
+    send = sender or _telegram_bot_send
+    results = []
+    for message in selected:
+        body = message.text
+        if message.attachments:
+            body += "\n\nAttachments:\n" + "\n".join(message.attachments)
+        try:
+            payload = send(token, target_chat, body)
+            ok = bool(payload.get("ok")) if isinstance(payload, dict) else False
+            result = payload.get("result", {}) if isinstance(payload, dict) and isinstance(payload.get("result"), dict) else {}
+            message_id = result.get("message_id")
+            if ok and message_id:
+                receipt = f"telegram:{target_chat}:{message_id}"
+                outbox.mark(message.id, "delivered", receipt=receipt)
+                status = "delivered"
+            else:
+                receipt = ""
+                outbox.mark(message.id, "failed")
+                status = "failed"
+        except Exception as exc:
+            receipt = ""
+            outbox.mark(message.id, "failed")
+            status = "failed"
+            payload = {"ok": False, "error": str(exc)}
+        results.append({
+            "id": message.id,
+            "kind": message.kind,
+            "status": status,
+            "receipt": receipt,
+            "telegram_ok": bool(payload.get("ok")) if isinstance(payload, dict) else False,
+            "error": str(payload.get("error", ""))[:300] if isinstance(payload, dict) else "",
+        })
+    return {
+        "outbox": str(outbox_path),
+        "mode": "telegram_bot_send",
+        "chat_id": target_chat,
+        "pending_before": len(pending),
+        "processed": len(results),
+        "messages": results,
+    }
+
 def render_openclaw_telegram_send_report(result: dict) -> str:
     lines = [
         "🐌 AffiliPilot OpenClaw Telegram delivery",
@@ -290,24 +379,22 @@ def queue_approval_batch(db_path: str | Path, *, batch_key: str, outbox_path: st
     preview_path = Path(manifest["out_dir"]) / "approval_batch_preview.txt"
     eligible_posts = [post for post in manifest.get("posts", []) if post.get("approval_eligible", True)]
     held_posts = [post for post in manifest.get("posts", []) if not post.get("approval_eligible", True)]
-    messages = [
-        OutboxMessage(
+    messages = []
+    should_send_summary = len(eligible_posts) != 1 or bool(held_posts)
+    if should_send_summary:
+        messages.append(OutboxMessage(
             id=f"{batch_key}:summary",
             kind="summary",
             text="\n".join([
-                f"🐌 AffiliPilot approval batch — {batch_key}",
-                f"Products considered: {manifest.get('total_products')}",
-                f"Drafts selected: {manifest.get('selected')}",
-                f"Approval eligible: {len(eligible_posts)}",
-                f"Held for enrichment: {len(held_posts)}",
-                f"Preview file: {preview_path}",
-                "Commands: /aff_approve <batch_key> <post_id>, /aff_reject <batch_key> <post_id>, /aff_edit <batch_key> <post_id>, /aff_blacklist <batch_key> <post_id>",
+                f"🐌 AffiliPilot batch — {batch_key}",
+                f"Selected: {manifest.get('selected')}/{manifest.get('total_products')} | Ready: {len(eligible_posts)} | Held: {len(held_posts)}",
+                "Reply on a card: ok / no / sửa / ban",
+                f"Preview: {preview_path}",
             ]),
             attachments=[str(preview_path)] if preview_path.exists() else [],
-        )
-    ]
-    if held_posts and not eligible_posts:
-        messages[0].text += "\nStatus: HELD — missing title/media, not queued for approval."
+        ))
+        if held_posts and not eligible_posts:
+            messages[0].text += "\nStatus: HELD — missing title/media, not queued for approval."
     for post in eligible_posts:
         card_path = Path(post["files"].get("telegram_card", ""))
         if not card_path.exists():
@@ -329,11 +416,11 @@ def mark_batch_delivered(outbox_path: str | Path, *, batch_key: str, post_id: st
     if not receipt:
         raise ValueError("receipt is required")
     outbox = Outbox(outbox_path)
-    expected_ids = [f"{batch_key}:summary", f"{batch_key}:{post_id}"]
     current = {m.id: m for m in outbox.load()}
-    missing = [message_id for message_id in expected_ids if message_id not in current]
-    if missing:
-        raise KeyError("Missing outbox messages: " + ", ".join(missing))
+    expected_ids = [message_id for message_id in [f"{batch_key}:summary", f"{batch_key}:{post_id}"] if message_id in current]
+    missing_card = f"{batch_key}:{post_id}" not in current
+    if missing_card:
+        raise KeyError("Missing outbox message: " + f"{batch_key}:{post_id}")
     for message_id in expected_ids:
         outbox.mark(message_id, "delivered", receipt=receipt)
     return {
@@ -358,6 +445,22 @@ def render_batch_delivery_report(result: dict) -> str:
     ]
     for message_id in result["messages"]:
         lines.append(f"- {message_id} -> delivered")
+    return "\n".join(lines)
+
+
+def render_telegram_bot_send_report(result: dict) -> str:
+    lines = [
+        "🐌 AffiliPilot Telegram bot delivery",
+        f"Mode: {result['mode']}",
+        f"Outbox: {result['outbox']}",
+        f"Target: telegram:{result['chat_id']}",
+        f"Pending before: {result['pending_before']}",
+        f"Processed: {result['processed']}",
+    ]
+    for item in result["messages"]:
+        receipt = f" receipt={item['receipt']}" if item.get("receipt") else ""
+        error = f" error={item['error']}" if item.get("error") else ""
+        lines.append(f"- {item['id']}: {item['status']}{receipt}{error}")
     return "\n".join(lines)
 
 def render_outbox_preview(outbox_path: str | Path) -> str:

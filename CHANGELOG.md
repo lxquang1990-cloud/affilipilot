@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## Unreleased — Scheduled profit E2E reliability and Shopee sourcing (June 2026)
+
+### Added
+- Shopee Accesstrade sheet sourcing module with support for best-sellers, major-programs, and brand-bonus sheet mappings.
+- Per-source cursor rotation for Shopee sheet discovery via `data/source-cursors.json`, so scheduled/manual E2E scans deeper rows instead of always reading only the top of the sheet.
+- Google Sheet CSV fallback from `/export?format=csv` to `/gviz/tq?tqx=out:csv` for sheets where the standard export endpoint returns HTTP 400.
+- `reel_with_image_comment` platform restriction and dispatch fallback when Facebook `/video_reels` requires multi-step `upload_phase`; approved posts fall back to Page `/videos` instead of failing silently.
+- Regression tests for batch-scoped Telegram approval publishing, manual E2E duplicate filtering, Shopee media enrichment, sheet cursor rotation, gviz CSV fallback, and Reels upload-flow fallback.
+
+### Changed
+- Scheduled E2E now runs with `--limit 3` instead of `--limit 1`, allowing up to three approval cards per scheduled batch.
+- Manual E2E batch keys (`manual-e2e-...`) now use the recent-selected duplicate filter, preventing repeated manual runs from selecting the same products.
+- Default profit source priority now includes Shopee best-sellers, major-programs, and brand-bonus sheets before fallback marketplace/datafeed sources.
+- Shopee media enrichment now probes PDP galleries when sheet/API media has fewer than two images, and avoids generic fallback assets for Shopee products.
+- Telegram approval publishing resolves publish artifacts by batch key to avoid stale cross-batch `facebook-plan.json` reuse.
+
+### Fixed
+- False publish blockers caused by resolving manifest media/text paths relative to process CWD instead of the AffiliPilot project root.
+- Shopee app/UI assets such as `ios_splash_screen_*` leaking into persisted product `image_urls` or publish media.
+- Facebook Reels one-shot upload failures: Graph error `(#100) The parameter upload_phase is required` now triggers a safe video-post fallback.
+- Scheduled/manual E2E duplicate and coverage behavior that repeatedly selected top-of-sheet products while missing deeper rows.
+
+### Verification
+- Targeted pytest suites covering the above fixes pass locally, plus `py_compile` checks on changed modules.
+- Manual E2E limit-3 dry run produced three approval cards; operator-approved posts published successfully to Facebook with lifecycle records.
+
 ## 0.4.0 — Revenue loop, publish types, Reels, and engagement ops (May 2026)
 
 ### Added

@@ -40,7 +40,7 @@ from affilipilot.publishing.safe_publish import render_publish_safe_validation, 
 from affilipilot.readiness import build_readiness_report, render_readiness_report
 from affilipilot.security import write_secret_template
 from affilipilot.telegram.adapter import AdapterConfig, handle_text_message
-from affilipilot.telegram.delivery import build_openclaw_telegram_plan, deliver_outbox_dry_run, mark_batch_delivered, queue_approval_batch, render_batch_delivery_report, render_delivery_report, render_openclaw_telegram_plan, render_openclaw_telegram_send_report, render_outbox_preview, send_openclaw_telegram_outbox
+from affilipilot.telegram.delivery import build_openclaw_telegram_plan, deliver_outbox_dry_run, mark_batch_delivered, queue_approval_batch, render_batch_delivery_report, render_delivery_report, render_openclaw_telegram_plan, render_openclaw_telegram_send_report, render_outbox_preview, send_openclaw_telegram_outbox, send_telegram_bot_outbox, render_telegram_bot_send_report
 from affilipilot.telegram.outbox import Outbox
 from affilipilot.workflows.accesstrade_links import convert_input_links, write_converted_input
 from affilipilot.workflows.auto_source_hunter import render_auto_source_hunter, run_auto_source_hunter
@@ -659,6 +659,11 @@ def cmd_openclaw_telegram_send(args: argparse.Namespace) -> int:
     result = send_openclaw_telegram_outbox(args.outbox, reply_to=args.reply_to, reply_channel=args.reply_channel, account=args.account, agent=args.agent or None, to=args.to, session_id=args.session_id, limit=args.limit)
     print(render_openclaw_telegram_send_report(result))
     return 0 if all(item["status"] in {"sent", "delivered"} for item in result["messages"]) else 2
+
+def cmd_telegram_bot_send(args: argparse.Namespace) -> int:
+    result = send_telegram_bot_outbox(args.outbox, secret_path=args.secret_path, chat_id=args.chat_id, limit=args.limit)
+    print(render_telegram_bot_send_report(result))
+    return 0 if all(item["status"] == "delivered" for item in result["messages"]) else 2
 
 
 def cmd_facebook_plan(args: argparse.Namespace) -> int:
@@ -1502,6 +1507,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--session-id", default="", help="Deprecated compatibility option; direct message sends do not use session routing")
     p.add_argument("--limit", type=int, default=1, help="Safety default: send one message only")
     p.set_defaults(func=cmd_openclaw_telegram_send)
+
+    p = sub.add_parser("telegram-bot-send", help="Send pending outbox messages through AffiliPilot Telegram bot token")
+    p.add_argument("--outbox", default="data/outbox/telegram.json")
+    p.add_argument("--secret-path", default="/home/snail/.openclaw/workspace/secrets/affilipilot.env", help="Secret env path; token is never printed")
+    p.add_argument("--chat-id", default="", help="Override TELEGRAM_CHAT_ID from secrets")
+    p.add_argument("--limit", type=int, default=1, help="Safety default: send one message only")
+    p.set_defaults(func=cmd_telegram_bot_send)
 
     p = sub.add_parser("facebook-plan", help="Build Facebook Graph API dry-run plan for approved posts; no POST")
     p.add_argument("--db", default="data/affilipilot.db")

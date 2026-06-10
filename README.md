@@ -18,7 +18,7 @@ Implemented:
 - automatic source hunting with Accesstrade broad-source fallback, Tiki campaign support, curated seed fallback, and local quality filtering
 - real PDP media enrichment for Shopee/Tiki/Lazada candidates, including gallery images and video URLs
 - local media/video validation and cache support
-- Facebook strategies: `single_photo`, `multi_photo`, `video_primary`, `video_primary_with_image_comment`
+- Facebook strategies: `single_photo`, `multi_photo`, `video_primary`, `video_primary_with_image_comment`, `reel_primary`, and `reel_primary_with_image_comment` with safe video-post fallback when the Page Reels upload flow is unavailable
 - video-first and multi-photo publish planning when valid product media is available
 - SQLite approval state and local conversion/ROI table
 - Telegram command parser/mock adapter, local outbox, OpenClaw Telegram delivery bridge, and delivery-proof gates
@@ -27,7 +27,7 @@ Implemented:
 - 7-day guarded auto-publish scheduler for a Facebook test window (`scripts/auto_publish_e2e.py`)
 - structured JSONL event log, circuit breaker, and `/tmp/affilipilot.KILL` kill switch
 - confidence scoring and tier classification (`auto`, `soft_gate`, `manual`, `blocked`)
-- Seed Hunter with curated keyword config, Shopee public API adapter, seed-file fallback, and seed-to-auto E2E workflow
+- Seed Hunter with curated keyword config, Shopee public API adapter, Shopee Accesstrade sheet sources, per-source cursor rotation, seed-file fallback, and seed-to-auto E2E workflow
 - readiness/doctor/campaign-status dashboards
 - budget tracker and daily digest/report skeletons
 
@@ -41,9 +41,19 @@ Not enabled by default:
 - TikTok/YouTube publishing
 
 
-## Latest release notes — May 2026
+## Latest release notes — June 2026
 
-This version focuses on making AffiliPilot more operator-light and publish-safe:
+This version focuses on making scheduled profit E2E more reliable, broader, and publish-safe:
+
+- Scheduled E2E now queues up to 3 candidates per run (`--limit 3`) while retaining approval-first publishing.
+- Shopee Accesstrade sheet sourcing now includes best-sellers, major-programs, and brand-bonus mappings with per-source cursor rotation so deeper rows are explored across runs.
+- Google Sheet fetch falls back from `/export?format=csv` to `/gviz/tq?tqx=out:csv` when Google rejects direct export.
+- Manual E2E batches use the same recent-selected duplicate filter as scheduled batches, reducing repeated candidate selection.
+- Shopee PDP media enrichment probes galleries when source media is thin and strips Shopee app/UI assets from persisted product media.
+- Telegram approval publish artifacts are batch-scoped to avoid stale cross-batch Facebook plan reuse.
+- Reels publish plans fall back to Page video posts when Graph requires the multi-step `upload_phase` flow; image comments remain best-effort after primary publish.
+
+Previous May 2026 focus:
 
 - Auto Source Hunter can collect broad Accesstrade inputs, prefer cleaner Tiki/Shopee-style candidates when available, convert links, draft captions, gate content, and queue only vetted approval cards.
 - Accesstrade `/v1/datafeeds` is treated as a broad/fallback source only; undocumented category request filters are not sent. Intended category lives as local `target_category` metadata.

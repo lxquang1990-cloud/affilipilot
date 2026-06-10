@@ -15,6 +15,11 @@ data/**/*.db
 data/**/*.sqlite
 data/outbox/*.json
 data/publish/*.json
+data/publish/
+data/drafts/
+data/inbound/
+data/telegram-mock/
+data/source-cursors.json
 data/auto_publish_state.json
 data/manual/
 data/cache/
@@ -36,6 +41,7 @@ backups/
 *.tmp
 .DS_Store
 data/**/*.lock
+data/**/*.url
 data/ready/
 docs/accesstrade/*.pdf
 docs/accesstrade/*.pptx

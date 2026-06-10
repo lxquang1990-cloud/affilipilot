@@ -130,6 +130,47 @@ def test_publish_safe_cli_renders_v2_checks(tmp_path, capsys):
     assert "- facebook_plan: PASS" in out
 
 
+def test_publish_safe_resolves_manifest_paths_from_project_root_not_cwd(tmp_path, monkeypatch):
+    project_root = tmp_path / "affilipilot"
+    data_dir = project_root / "data"
+    db = data_dir / "affilipilot.db"
+    drafts = data_dir / "runs" / "batch" / "drafts"
+    drafts.mkdir(parents=True)
+    image = drafts / "product.jpg"
+    _jpeg(image)
+    input_file = tmp_path / "links.txt"
+    input_file.write_text(
+        "https://go.isclix.com/deep_link/a | title=Kệ bếp gọn góc nhỏ | category=storage | price=199000 | "
+        f"image_path={image.relative_to(project_root)} | original_url=https://shopee.vn/ke-bep-i.1.2 | "
+        "media_source=user_uploaded_image | media_confidence=high",
+        encoding="utf-8",
+    )
+    create_approval_batch(input_file, drafts, db, batch_key="batch", limit=1)
+    post_file = drafts / "post_20260516_001.post.txt"
+    post_file.write_text(
+        "Phù hợp với nhà bếp cần sắp xếp chai lọ và đồ dùng nhỏ cho gọn. "
+        "Lý do đáng xem: kệ giúp gom đồ vào một chỗ, dễ lấy và giảm lộn xộn trên mặt bếp. "
+        "Điểm kiểm chứng hiện có: giá tham khảo khoảng 199.000đ, có hình sản phẩm để đối chiếu. "
+        "Trước khi chốt, nên kiểm tra: kích thước, tải trọng, chất liệu, cách lắp, ảnh review trong không gian thật. "
+        "Bài viết có chứa link tiếp thị liên kết. Nếu bạn mua qua link, page có thể nhận hoa hồng nhỏ.",
+        encoding="utf-8",
+    )
+    decide_post(db, batch_key="batch", post_id="post_20260516_001", decision="approved")
+    plan = tmp_path / "plan.json"
+    _write_plan(plan, image_path=str(image))
+    outbox = tmp_path / "outbox.json"
+    _delivered_outbox(outbox)
+    outside_cwd = tmp_path / "outside"
+    outside_cwd.mkdir()
+    monkeypatch.chdir(outside_cwd)
+
+    result = validate_publish_safe(db_path=db, batch_key="batch", post_id="post_20260516_001", plan_path=plan, outbox_path=outbox)
+
+    assert result["ok"]
+    assert "media_quality_missing_local_image" not in result["reasons"]
+    assert "content_too_thin" not in result["reasons"]
+
+
 def test_publish_safe_accepts_video_description_caption(tmp_path):
     from affilipilot.publishing.publish_safe_v2 import _check_plan
 

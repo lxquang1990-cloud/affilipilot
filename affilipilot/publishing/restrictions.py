@@ -74,6 +74,22 @@ FACEBOOK_REEL = PlatformRestriction(
     ),
 )
 
+FACEBOOK_REEL_WITH_IMAGE_COMMENT = PlatformRestriction(
+    platform="facebook_page",
+    publish_type="reel_with_image_comment",
+    metrics_profile="reel",
+    caption_max_chars=2200,
+    image_min_count=1,
+    image_max_count=4,
+    video_required=True,
+    video_max_mb=1024,
+    video_duration_seconds=(3, 90),
+    rules=COMMON_RULES + (
+        "Publish the short vertical video as the Reel and attach product images only through the supported image-comment flow.",
+        "If image-comment publishing is unavailable, hold instead of silently downgrading to a mismatched feed post.",
+    ),
+)
+
 FACEBOOK_LINK_POST = PlatformRestriction(
     platform="facebook_page",
     publish_type="link_post",
@@ -98,7 +114,7 @@ FACEBOOK_TEXT_POST = PlatformRestriction(
     ),
 )
 
-ALL_RESTRICTIONS = [FACEBOOK_PHOTO_POST, FACEBOOK_VIDEO_POST, FACEBOOK_REEL, FACEBOOK_LINK_POST, FACEBOOK_TEXT_POST]
+ALL_RESTRICTIONS = [FACEBOOK_PHOTO_POST, FACEBOOK_VIDEO_POST, FACEBOOK_REEL, FACEBOOK_REEL_WITH_IMAGE_COMMENT, FACEBOOK_LINK_POST, FACEBOOK_TEXT_POST]
 RESTRICTIONS: dict[str, PlatformRestriction] = {}
 for item in ALL_RESTRICTIONS:
     RESTRICTIONS[item.key] = item

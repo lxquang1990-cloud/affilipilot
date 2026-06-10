@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from affilipilot.models import ProductCandidate
+from affilipilot.provider_failures import ProviderBlockedError, classify_provider_failure
 
 SHOPEE_VN_BASE = "https://shopee.vn"
 PRODUCT_PATTERNS = (
@@ -100,8 +101,9 @@ def _request_json(url: str, *, timeout: int = 30) -> dict[str, Any]:
             return json.loads(resp.read().decode("utf-8", errors="replace"))
     except urllib.error.HTTPError as exc:
         body = exc.read(500).decode("utf-8", errors="replace")
-        if exc.code == 403 and "90309999" in body:
-            raise RuntimeError("blocked_by_shopee_403") from exc
+        failure = classify_provider_failure("shopee", status_code=exc.code, body=body)
+        if failure.state.value == "provider_blocked":
+            raise ProviderBlockedError(failure) from exc
         raise
 
 

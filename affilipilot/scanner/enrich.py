@@ -106,7 +106,7 @@ def extract_shopee_product_media(html_text: str, *, limit: int = 12) -> dict[str
     }
 
 
-def enrich_shopee_public_api_media(url: str) -> dict[str, Any]:
+def enrich_shopee_public_api_media(url: str, *, timeout: int = 8) -> dict[str, Any]:
     """Best-effort live Shopee detail enrichment for gallery/video.
 
     Shopee sometimes blocks this endpoint from server IPs; callers should treat
@@ -116,7 +116,7 @@ def enrich_shopee_public_api_media(url: str) -> dict[str, Any]:
     if not ids:
         return {"image_urls": [], "video_urls": [], "price_vnd": None, "error": "missing_shopee_ids"}
     try:
-        product = get_product_detail(ids[0], ids[1], timeout=30)
+        product = get_product_detail(ids[0], ids[1], timeout=timeout)
     except Exception as exc:  # noqa: BLE001
         return {"image_urls": [], "video_urls": [], "price_vnd": None, "error": type(exc).__name__}
     if not product:
@@ -201,7 +201,7 @@ def harvest_lazada_product_urls(html_text: str, *, limit: int = 20) -> list[str]
 def enrich_product_from_url(url: str, *, title: str = "", category: str = "unknown", source: str = "AUTO", timeout: int = 30) -> dict[str, Any]:
     shopee_api_media: dict[str, Any] = {}
     if _is_shopee_product_url(url):
-        shopee_api_media = enrich_shopee_public_api_media(url)
+        shopee_api_media = enrich_shopee_public_api_media(url, timeout=min(timeout, 8))
         req = urllib.request.Request(
             url,
             headers={
@@ -244,7 +244,7 @@ def enrich_product_from_url(url: str, *, title: str = "", category: str = "unkno
             product["notes"] = (product.get("notes", "") + ";lazada_product_media").strip(";")
         if media.get("video_urls"):
             product["video_urls"] = media["video_urls"]
-    images = harvest_image_urls(html, title=title or product.get("title", ""), limit=8)
+    images = [] if _is_shopee_product_url(url) else harvest_image_urls(html, title=title or product.get("title", ""), limit=8)
     if images and not product.get("image_urls"):
         product["image_urls"] = images
     if not product.get("image_url") and images:
@@ -274,19 +274,27 @@ def enrich_batch_media(db_path: str | Path, *, batch_key: str, out_dir: str | Pa
         existing_images = post.get("files", {}).get("images") or []
         has_video_file = bool(prod.get("video_path") or post.get("files", {}).get("video"))
         has_video_url = bool(prod.get("video_url") or prod.get("video_urls"))
-        needs_video_probe = _is_shopee_product_url(prod.get("original_url") or prod.get("url", "")) and not (has_video_file or has_video_url)
-        if (not needs_video_probe) and (prod.get("image_path") or post.get("files", {}).get("image") or post.get("media", {}).get("ok")) and (existing_images or not prod.get("image_urls")):
+        source_url = prod.get("original_url") or prod.get("url", "")
+        is_shopee_product = _is_shopee_product_url(source_url)
+        needs_video_probe = is_shopee_product and not (has_video_file or has_video_url)
+        image_url_count = len(prod.get("image_urls") or []) + (1 if prod.get("image_url") else 0)
+        needs_gallery_probe = is_shopee_product and image_url_count < 2
+        if (not needs_video_probe) and (not needs_gallery_probe) and (prod.get("image_path") or post.get("files", {}).get("image") or post.get("media", {}).get("ok")) and (existing_images or not prod.get("image_urls")):
             results.append({"post_id": post_id, "status": "already_has_media"})
             continue
         image_url = prod.get("image_url", "")
         try:
             from affilipilot.media_quality import BAD_MEDIA_NAME_HINTS
+            prod["image_urls"] = [
+                url for url in (prod.get("image_urls") or [])
+                if not any(hint in url.lower() for hint in BAD_MEDIA_NAME_HINTS)
+            ]
             has_bad_media = any(hint in f"{image_url} {prod.get('image_path', '')}".lower() for hint in BAD_MEDIA_NAME_HINTS)
         except Exception:  # noqa: BLE001
             has_bad_media = False
-        if not image_url or has_bad_media or needs_video_probe:
+        if not image_url or has_bad_media or needs_video_probe or needs_gallery_probe:
             try:
-                enriched = enrich_product_from_url(prod.get("original_url") or prod.get("url", ""), title=prod.get("title", ""), category=prod.get("category", "unknown"), source="AUTO")
+                enriched = enrich_product_from_url(source_url, title=prod.get("title", ""), category=prod.get("category", "unknown"), source="AUTO")
                 image_url = enriched.get("image_url", "") or image_url
                 if image_url:
                     prod["image_url"] = image_url

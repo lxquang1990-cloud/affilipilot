@@ -49,9 +49,15 @@ def build_graph_payload(*, page_id: str, message: str, link: str = "", image_pat
     endpoint = f"/{page_id}/feed"
     strategy = "feed"
     if video_path:
-        endpoint = f"/{page_id}/reels" if publish_type == "reel" else f"/{page_id}/videos"
+        is_reel = publish_type in {"reel", "reel_with_image_comment"}
+        endpoint = f"/{page_id}/video_reels" if is_reel else f"/{page_id}/videos"
         payload = {"description": message, "url": link, "local_video_path": video_path, "local_image_paths": image_paths[:4]}
-        strategy = "reel_primary" if publish_type == "reel" else ("video_primary_with_image_comment" if image_paths else "video_primary")
+        if publish_type == "reel_with_image_comment":
+            strategy = "reel_primary_with_image_comment"
+        elif publish_type == "reel":
+            strategy = "reel_primary"
+        else:
+            strategy = "video_primary_with_image_comment" if image_paths else "video_primary"
     elif len(image_paths) >= 2:
         endpoint = f"/{page_id}/feed"
         payload = {"message": message, "url": link, "local_image_paths": image_paths[:4]}
@@ -68,15 +74,44 @@ def build_graph_payload(*, page_id: str, message: str, link: str = "", image_pat
 
 
 
-def _publish_text(post: dict[str, Any]) -> str:
-    post_file = Path(post.get("files", {}).get("post_text", ""))
+def _resolve_project_path(path: str | Path, *, project_root: Path) -> Path:
+    candidate = Path(path)
+    return candidate if candidate.is_absolute() else project_root / candidate
+
+
+def _publish_text(post: dict[str, Any], *, project_root: Path | None = None) -> str:
+    raw_post_file = post.get("files", {}).get("post_text", "")
+    post_file = _resolve_project_path(raw_post_file, project_root=project_root) if raw_post_file and project_root else Path(raw_post_file)
     artifact_text = post_file.read_text(encoding="utf-8", errors="ignore").strip() if post_file.exists() else ""
-    manifest_text = str(post.get("caption") or "").strip()
+    manifest_text = str(post.get("caption") or post.get("text") or post.get("message") or "").strip()
     # Prefer the current manifest caption over a draft artifact. Manual edits and
     # regenerated copy update the manifest first; stale `.post.txt` files must not
     # leak old captions into Facebook payloads. Fall back to the artifact for
     # legacy batches that do not carry `post.caption`.
     return manifest_text or artifact_text
+
+
+def _normalize_post_paths(post: dict[str, Any], *, project_root: Path) -> dict[str, Any]:
+    """Return a shallow-normalized post with local media/draft paths absolute.
+
+    Scheduled batches store paths relative to the AffiliPilot project root. The
+    long-running Telegram bot runs from `/home/snail/passivecash`, so publish
+    planning must not resolve those paths against process CWD.
+    """
+    normalized = {**post}
+    files = dict(post.get("files", {}))
+    for key in ("post_text", "telegram_card", "image", "video"):
+        if files.get(key):
+            files[key] = str(_resolve_project_path(files[key], project_root=project_root))
+    if isinstance(files.get("images"), list):
+        files["images"] = [str(_resolve_project_path(path, project_root=project_root)) for path in files["images"] if path]
+    normalized["files"] = files
+    product = dict(post.get("product", {}))
+    for key in ("image_path", "video_path"):
+        if product.get(key):
+            product[key] = str(_resolve_project_path(product[key], project_root=project_root))
+    normalized["product"] = product
+    return normalized
 
 def _post_link(post: dict[str, Any]) -> str:
     product = post.get("product", {})
@@ -92,14 +127,16 @@ def plan_facebook_batch(db_path: str | Path, *, batch_key: str, out_path: str | 
     manifest = batch["manifest"]
     config = config or FacebookConfig.from_env()
     health = check_facebook_config(config)
+    project_root = Path(db_path).expanduser().resolve().parents[1]
 
     plans: list[FacebookPostPlan] = []
     seen_texts: set[str] = set()
-    for post in manifest.get("posts", []):
+    for raw_post in manifest.get("posts", []):
+        post = _normalize_post_paths(raw_post, project_root=project_root)
         post_id = post["post_id"]
         approval = approvals.get(post_id, {})
         approved = approval.get("status") == "approved"
-        text = _publish_text(post)
+        text = _publish_text(post, project_root=project_root)
         gate = evaluate_publish_gate(
             post,
             approved=approved,

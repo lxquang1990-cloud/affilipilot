@@ -29,11 +29,40 @@ class SafeCheck:
         return self.status in {"pass", "pass_with_warning"}
 
 
+def _resolve_project_path(path: str | Path, *, project_root: Path) -> Path:
+    candidate = Path(path)
+    return candidate if candidate.is_absolute() else project_root / candidate
+
+
+def _normalize_post_paths(post: dict[str, Any], *, project_root: Path) -> dict[str, Any]:
+    """Return a shallow-normalized post with local paths resolved to project root.
+
+    Scheduled batches store media/draft paths relative to the AffiliPilot project
+    root, while the Telegram/OpenClaw process may run from another CWD. Publish
+    safety must inspect the same files used by facebook-plan, not paths resolved
+    against process CWD.
+    """
+    normalized = {**post}
+    files = dict(post.get("files", {}))
+    for key in ("post_text", "telegram_card", "image", "video"):
+        if files.get(key):
+            files[key] = str(_resolve_project_path(files[key], project_root=project_root))
+    if isinstance(files.get("images"), list):
+        files["images"] = [str(_resolve_project_path(path, project_root=project_root)) for path in files["images"] if path]
+    normalized["files"] = files
+    product = dict(post.get("product", {}))
+    for key in ("image_path", "video_path"):
+        if product.get(key):
+            product[key] = str(_resolve_project_path(product[key], project_root=project_root))
+    normalized["product"] = product
+    return normalized
+
+
 def _text_for_post(post: dict[str, Any]) -> str:
     post_file = Path(post.get("files", {}).get("post_text", ""))
-    if str(post_file) and post_file.exists():
-        return post_file.read_text(encoding="utf-8", errors="ignore")
-    return str(post.get("post_text", ""))
+    artifact_text = post_file.read_text(encoding="utf-8", errors="ignore") if str(post_file) and post_file.exists() else ""
+    manifest_text = str(post.get("caption") or post.get("text") or post.get("message") or post.get("post_text") or "").strip()
+    return manifest_text or artifact_text
 
 
 def _check_batch_post(db_path: str | Path, batch_key: str, post_id: str) -> tuple[SafeCheck, dict[str, Any] | None, dict[str, Any] | None]:
@@ -41,8 +70,9 @@ def _check_batch_post(db_path: str | Path, batch_key: str, post_id: str) -> tupl
     batch = db.get_batch(batch_key)
     if not batch:
         return SafeCheck("batch_post", "block", ["batch_not_found"]), None, None
+    project_root = Path(db_path).expanduser().resolve().parents[1]
     posts = batch.get("manifest", {}).get("posts", [])
-    matches = [item for item in posts if item.get("post_id") == post_id]
+    matches = [_normalize_post_paths(item, project_root=project_root) for item in posts if item.get("post_id") == post_id]
     if not matches:
         return SafeCheck("batch_post", "block", ["batch_post_not_found"]), batch, None
     return SafeCheck("batch_post", "pass", details={"batch_status": batch.get("status", "")}), batch, matches[0]
@@ -64,7 +94,9 @@ def _check_delivery(outbox_path: str | Path, batch_key: str, post_id: str) -> Sa
     messages = {m.id: m for m in outbox.load()}
     reasons: list[str] = []
     details: dict[str, Any] = {}
-    for message_id in [f"{batch_key}:summary", f"{batch_key}:{post_id}"]:
+    # The approval card is mandatory delivery proof. The batch summary is optional
+    # for concise single-card batches.
+    for message_id in [f"{batch_key}:{post_id}"]:
         msg = messages.get(message_id)
         if not msg:
             reasons.append(f"delivery_missing:{message_id}")
@@ -74,6 +106,10 @@ def _check_delivery(outbox_path: str | Path, batch_key: str, post_id: str) -> Sa
             reasons.append(f"delivery_not_delivered:{message_id}:{msg.status}")
         if not msg.receipt:
             reasons.append(f"delivery_missing_receipt:{message_id}")
+    summary_id = f"{batch_key}:summary"
+    summary = messages.get(summary_id)
+    if summary:
+        details[summary_id] = {"status": summary.status, "receipt": summary.receipt, "delivered_at": summary.delivered_at}
     return SafeCheck("delivery", "block" if reasons else "pass", reasons, details=details)
 
 

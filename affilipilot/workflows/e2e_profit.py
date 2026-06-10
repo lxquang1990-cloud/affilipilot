@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import urllib.error
 from pathlib import Path
 from typing import Any
 
 from affilipilot.accesstrade.campaigns import write_campaign_registry
 from affilipilot.accesstrade.catalog import fetch_datafeeds, fetch_top_products, write_products_input
+from affilipilot.accesstrade.shopee_sheets import fetch_shopee_sheet_products
 from affilipilot.content.early_filter import evaluate_early_product_filter
 from affilipilot.content.market_fit import evaluate_market_fit
 from affilipilot.content.product_quality import evaluate_product_content
@@ -17,6 +19,7 @@ from affilipilot.offer import validate_offer
 from affilipilot.publishing.ready_to_publish import build_ready_to_publish_report
 from affilipilot.quality import evaluate_quality_gate
 from affilipilot.scoring.portfolio import select_portfolio
+from affilipilot.scanner.enrich import enrich_product_from_url
 from affilipilot.scoring.product_score import score_product
 from affilipilot.sources.manual_input import parse_link_lines
 from affilipilot.telegram.delivery import queue_approval_batch
@@ -31,8 +34,16 @@ from affilipilot.snailbot_integration import AffiliPilotRunState, append_event, 
 # - Some datafeeds include promotion details per product; prefer status_discount feeds.
 # - API rate limit is 30 requests/minute, so keep default source count small.
 DEFAULT_SOURCE_CACHE_DIR = Path("data/cache/accesstrade/sources")
+DEFAULT_SOURCE_CURSOR_PATH = Path("data/source-cursors.json")
 
 DEFAULT_PROFIT_SOURCES = [
+    # Primary flow: official Accesstrade/Shopee support sheets. Rotate offsets
+    # per sheet so scheduled/manual E2E explores deeper rows instead of always
+    # re-reading only the top of each sheet.
+    {"kind": "shopee_sheet", "name": "shopee_best_sellers_sheet", "sheet_key": "shopee_best_sellers", "limit": 80, "campaign_key": "SHOPEE"},
+    {"kind": "shopee_sheet", "name": "shopee_major_programs_sheet", "sheet_key": "shopee_major_programs", "limit": 80, "campaign_key": "SHOPEE"},
+    {"kind": "shopee_sheet", "name": "shopee_brand_bonus_sheet", "sheet_key": "shopee_brand_bonus", "limit": 80, "campaign_key": "SHOPEE"},
+    # Secondary fallback sources.
     {"kind": "datafeed", "name": "lazada_home_appliance", "domain": "lazada.vn", "target_category": "home_appliance", "status_discount": "1", "limit": 30, "campaign_key": "LAZADA"},
     {"kind": "datafeed", "name": "lazada_electronics", "domain": "lazada.vn", "target_category": "electronics", "status_discount": "1", "limit": 30, "campaign_key": "LAZADA"},
     {"kind": "datafeed", "name": "lazada_computing", "domain": "lazada.vn", "target_category": "computing", "status_discount": "1", "limit": 30, "campaign_key": "LAZADA"},
@@ -49,7 +60,18 @@ def _post_text(post: dict[str, Any]) -> str:
     return path.read_text(encoding="utf-8", errors="ignore") if path.exists() else ""
 
 def _norm_url(url: str) -> str:
-    return (url or "").split("?", 1)[0].rstrip("/").lower()
+    value = (url or "").strip().lower()
+    if not value:
+        return ""
+    if value.startswith("shopee."):
+        value = "https://" + value
+    value = value.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    match = re.search(r"shopee\.(?:vn|com)/(?:product/)?([0-9]+)/([0-9]+)", value)
+    if not match:
+        match = re.search(r"(?:^|-)i\.([0-9]+)\.([0-9]+)(?:$|[./-])", value)
+    if match:
+        return f"shopee:{match.group(1)}:{match.group(2)}"
+    return value
 
 
 def _norm_alias(value: str) -> str:
@@ -240,6 +262,54 @@ def _source_filter_note(source: dict[str, Any]) -> str:
         return "category_filter_not_supported_by_accesstrade:datafeed_broad_fetch_internal_target_category_only"
     return ""
 
+def _load_source_cursors(path: str | Path = DEFAULT_SOURCE_CURSOR_PATH) -> dict[str, Any]:
+    path = Path(path)
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _save_source_cursors(cursors: dict[str, Any], path: str | Path = DEFAULT_SOURCE_CURSOR_PATH) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cursors, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _source_offset(source: dict[str, Any], *, cursor_path: str | Path = DEFAULT_SOURCE_CURSOR_PATH) -> int:
+    if source.get("offset") not in (None, ""):
+        try:
+            return max(0, int(source.get("offset")))
+        except (TypeError, ValueError):
+            return 0
+    cursors = _load_source_cursors(cursor_path)
+    key = str(source.get("name") or source.get("sheet_key") or source.get("kind", "source"))
+    try:
+        return max(0, int(cursors.get(key, {}).get("offset", 0)))
+    except (TypeError, ValueError, AttributeError):
+        return 0
+
+
+def _advance_source_cursor(source: dict[str, Any], report: dict[str, Any], *, cursor_path: str | Path = DEFAULT_SOURCE_CURSOR_PATH) -> None:
+    if source.get("kind") != "shopee_sheet" or not report.get("ok"):
+        return
+    key = str(source.get("name") or source.get("sheet_key") or source.get("kind", "source"))
+    limit = int(report.get("limit") or source.get("limit") or 0)
+    offset = int(report.get("offset") or 0)
+    total_available = int(report.get("total_available") or 0)
+    if limit <= 0:
+        return
+    next_offset = offset + limit
+    if total_available and next_offset >= total_available:
+        next_offset = 0
+    cursors = _load_source_cursors(cursor_path)
+    cursors[key] = {"offset": next_offset, "last_offset": offset, "limit": limit, "total_available": total_available}
+    _save_source_cursors(cursors, cursor_path)
+
+
 def _source_page(source: dict[str, Any], *, batch_key: str = "") -> int:
     """Return a deterministic rotating page for scheduled discovery.
 
@@ -260,7 +330,7 @@ def _source_page(source: dict[str, Any], *, batch_key: str = "") -> int:
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
     return 1 + (int(digest[:8], 16) % 10)
 
-def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Path = DEFAULT_SOURCE_CACHE_DIR, batch_key: str = "") -> dict[str, Any]:
+def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Path = DEFAULT_SOURCE_CACHE_DIR, batch_key: str = "", cursor_path: str | Path = DEFAULT_SOURCE_CURSOR_PATH) -> dict[str, Any]:
     name = source.get("name") or source.get("kind", "source")
     out = out_dir / f"{name}.json"
     run_cache_out = out_dir / "cache" / f"{name}.json"
@@ -270,6 +340,13 @@ def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Pat
     try:
         if source.get("kind") == "top_products":
             data = fetch_top_products(merchant=source.get("merchant", ""), date_from=source.get("date_from", ""), date_to=source.get("date_to", ""))
+        elif source.get("kind") == "shopee_sheet":
+            from affilipilot.accesstrade.shopee_sheets import DEFAULT_SHOPEE_SHEETS
+            sheet_id = str(source.get("sheet_id") or "")
+            gid = str(source.get("gid") or "")
+            if not sheet_id:
+                sheet_id, gid = DEFAULT_SHOPEE_SHEETS.get(str(source.get("sheet_key") or "shopee_best_sellers"), DEFAULT_SHOPEE_SHEETS["shopee_best_sellers"])
+            data = fetch_shopee_sheet_products(sheet_id=sheet_id, gid=gid, limit=int(source.get("limit", 100)), offset=_source_offset(source, cursor_path=cursor_path), source_name=name)
         else:
             data = fetch_datafeeds(
                 campaign=source.get("campaign", ""),
@@ -292,7 +369,7 @@ def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Pat
         if cached:
             data["fallback_error"] = f"source_fetch_error:{type(exc).__name__}"
     filter_note = _source_filter_note(source)
-    data["requested_page"] = _source_page(source, batch_key=batch_key) if source.get("kind") != "top_products" else None
+    data["requested_page"] = _source_page(source, batch_key=batch_key) if source.get("kind") not in {"top_products", "shopee_sheet"} else None
     if filter_note:
         data["source_filter_note"] = filter_note
         data["target_category"] = source.get("target_category", "")
@@ -306,6 +383,7 @@ def _fetch_source(source: dict[str, Any], out_dir: Path, *, cache_dir: str | Pat
     data["name"] = name
     data["campaign_key"] = source.get("campaign_key", "")
     data["json_path"] = str(out)
+    _advance_source_cursor(source, data, cursor_path=cursor_path)
     return data
 
 
@@ -345,6 +423,101 @@ def _serialize_portfolio_blocked(blocked: list[dict[str, Any]]) -> list[dict[str
             "reason": item.get("portfolio_block_reason", ""),
         })
     return result
+
+
+def _uses_recent_duplicate_filter(batch_key: str) -> bool:
+    return str(batch_key or "").startswith(("auto-source-", "scheduled-", "profit-first-", "manual-e2e-"))
+
+
+def _recent_selected_urls(db_path: str | Path, *, limit_batches: int = 96, auto_only: bool = False) -> set[str]:
+    """Return recently selected product URLs from saved batch manifests.
+
+    Source sheets/APIs often return overlapping candidate sets across runs, so
+    in-run dedup is not enough. Suppress products that already reached an
+    approval batch recently. Shopee product URLs are normalized by shop/item id
+    so product/product-page/deep-link query variants still dedup together.
+    """
+    db = AffiliPilotDB(db_path)
+    db.init()
+    urls: set[str] = set()
+    with db.connect() as conn:
+        rows = conn.execute(
+            "SELECT batch_key, manifest_json FROM batches ORDER BY id DESC LIMIT ?",
+            (max(0, int(limit_batches)),),
+        ).fetchall()
+    for row in rows:
+        batch_key = str(row["batch_key"])
+        if auto_only and not batch_key.startswith("auto-source-"):
+            continue
+        try:
+            manifest = json.loads(row["manifest_json"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        for post in manifest.get("posts", []):
+            product = post.get("product", {}) if isinstance(post, dict) else {}
+            for value in (product.get("original_url"), product.get("url")):
+                norm = _norm_url(str(value or ""))
+                if norm:
+                    urls.add(norm)
+    return urls
+
+
+def _filter_recently_selected(ranked: list[dict[str, Any]], recent_urls: set[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    fresh: list[dict[str, Any]] = []
+    blocked: list[dict[str, Any]] = []
+    for item in ranked:
+        product = item.get("product")
+        keys = {_norm_url(getattr(product, "url", "")), _norm_url(getattr(product, "original_url", ""))}
+        keys.discard("")
+        if keys & recent_urls:
+            blocked.append({**item, "portfolio_block_reason": "recently_selected_product"})
+        else:
+            fresh.append(item)
+    return fresh, blocked
+
+def _enrich_selected_media(selected: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    metrics = {"attempted": 0, "updated": 0, "failed": 0, "skipped": 0}
+    enriched: list[dict[str, Any]] = []
+    for item in selected:
+        product = item.get("product")
+        if not product:
+            enriched.append(item)
+            continue
+        if product.image_url or product.image_urls or product.image_path or product.video_url or product.video_urls or product.video_path:
+            metrics["skipped"] += 1
+            enriched.append(item)
+            continue
+        detail_url = product.original_url or product.url
+        if not detail_url:
+            metrics["skipped"] += 1
+            enriched.append(item)
+            continue
+        metrics["attempted"] += 1
+        try:
+            media = enrich_product_from_url(detail_url, title=product.title, category=product.category, source=product.campaign_key or item.get("campaign_key", "AUTO"), timeout=25)
+        except Exception as exc:  # noqa: BLE001 - keep source candidate and report enrichment failure
+            product.notes = (product.notes + ";" if product.notes else "") + f"media_enrich_failed={type(exc).__name__}"
+            metrics["failed"] += 1
+            enriched.append(item)
+            continue
+        image_urls = media.get("image_urls") or []
+        video_urls = media.get("video_urls") or []
+        if image_urls:
+            product.image_url = image_urls[0]
+            product.image_urls = image_urls
+            product.media_source = media.get("media_source") or ("shopee_pdp" if "shopee." in detail_url.lower() else "pdp_image")
+            product.media_confidence = media.get("media_confidence") or "official"
+            product.notes = (product.notes + ";" if product.notes else "") + "pdp_media_enriched"
+            metrics["updated"] += 1
+        if video_urls:
+            product.video_url = video_urls[0]
+            product.video_urls = video_urls
+            if not image_urls:
+                metrics["updated"] += 1
+        if not image_urls and not video_urls:
+            metrics["failed"] += 1
+        enriched.append(item)
+    return enriched, metrics
 
 def run_profit_first_e2e(
     *,
@@ -432,16 +605,23 @@ def run_profit_first_e2e(
                 candidates_by_url[key] = item
 
     ranked = sorted(candidates_by_url.values(), key=lambda item: item["score"], reverse=True)
-    selected, portfolio_blocked = select_portfolio(ranked, limit=select_limit)
+    recent_urls = _recent_selected_urls(db_path) if _uses_recent_duplicate_filter(batch_key) else set()
+    fresh_ranked, recent_blocked = _filter_recently_selected(ranked, recent_urls)
+    selected, portfolio_blocked = select_portfolio(fresh_ranked, limit=select_limit)
+    selected, selected_media_enrichment = _enrich_selected_media(selected)
+    portfolio_blocked = recent_blocked + portfolio_blocked
     record(
         "candidates_ranked",
         "Candidates ranked and portfolio selected",
         {
             "candidate_count": len(ranked),
+            "fresh_candidate_count": len(fresh_ranked),
+            "recent_duplicate_blocked_count": len(recent_blocked),
             "early_blocked_count": len(early_blocked),
             "taste_blocked_count": len(taste_blocked),
             "portfolio_blocked_count": len(portfolio_blocked),
             "selected_count": len(selected),
+            "selected_media_enrichment": selected_media_enrichment,
         },
     )
     merged_input.write_text("\n".join(_line_for_product(item["product"]) for item in ranked) + ("\n" if ranked else ""), encoding="utf-8")
@@ -458,7 +638,7 @@ def run_profit_first_e2e(
     record("conversion", "Selected products converted or prepared", {"selected_count": len(selected), "conversion_ok_count": conversion.get("ok_count", 0), "conversion_failed_count": conversion.get("failed_count", 0), "effective_input": str(effective_input)})
 
     if not effective_input.exists() or effective_input.stat().st_size == 0:
-        summary = {"ok": False, "reason": "no_effective_input", "batch_key": batch_key, "work_dir": str(work_dir), "outbox_path": str(outbox_path), "sources": source_reports, "candidate_count": len(ranked), "early_blocked_count": len(early_blocked), "top_early_block_reasons": _top_reasons(early_blocked), "taste_blocked_count": len(taste_blocked), "top_taste_block_reasons": _top_taste_reasons(taste_blocked), "portfolio_blocked_count": len(portfolio_blocked), "top_portfolio_block_reasons": _top_portfolio_reasons(portfolio_blocked), "selected_count": len(selected), "selected_input": str(selected_input), "effective_input": str(effective_input), "conversion": conversion, "queued_messages": 0}
+        summary = {"ok": False, "reason": "no_effective_input", "batch_key": batch_key, "work_dir": str(work_dir), "outbox_path": str(outbox_path), "sources": source_reports, "candidate_count": len(ranked), "fresh_candidate_count": len(fresh_ranked), "recent_duplicate_blocked_count": len(recent_blocked), "early_blocked_count": len(early_blocked), "top_early_block_reasons": _top_reasons(early_blocked), "taste_blocked_count": len(taste_blocked), "top_taste_block_reasons": _top_taste_reasons(taste_blocked), "portfolio_blocked_count": len(portfolio_blocked), "top_portfolio_block_reasons": _top_portfolio_reasons(portfolio_blocked), "selected_count": len(selected), "selected_input": str(selected_input), "effective_input": str(effective_input), "conversion": conversion, "queued_messages": 0}
         if queue_telegram:
             message = OutboxMessage(
                 id=f"{batch_key}:no-post-digest",
@@ -533,6 +713,8 @@ def run_profit_first_e2e(
         "outbox_path": str(outbox_path),
         "source_count": len(sources),
         "candidate_count": len(ranked),
+        "fresh_candidate_count": len(fresh_ranked),
+        "recent_duplicate_blocked_count": len(recent_blocked),
         "early_blocked_count": len(early_blocked),
         "top_early_block_reasons": _top_reasons(early_blocked),
         "taste_blocked_count": len(taste_blocked),

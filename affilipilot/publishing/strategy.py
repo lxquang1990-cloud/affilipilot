@@ -9,6 +9,7 @@ from affilipilot.video_probe import VideoProbe, probe_video
 FACEBOOK_PHOTO_POST = "photo_post"
 FACEBOOK_VIDEO_POST = "video_post"
 FACEBOOK_REEL = "reel"
+FACEBOOK_REEL_WITH_IMAGE_COMMENT = "reel_with_image_comment"
 FACEBOOK_LINK_POST = "link_post"
 FACEBOOK_TEXT_POST = "text_post"
 
@@ -50,7 +51,8 @@ def select_facebook_publish_strategy(post: dict[str, Any]) -> PublishStrategy:
     if video_path:
         probe = _probe_for_strategy(video_path)
         if (probe and probe.is_reel_candidate) or _explicit_reel_hint(video_path, product):
-            return PublishStrategy("facebook_page", FACEBOOK_REEL, "reel", "vertical_or_reel_video", endpoint_hint="reels", video_width=(probe.width if probe else 0), video_height=(probe.height if probe else 0), video_duration_seconds=(probe.duration_seconds if probe else 0.0))
+            publish_type = FACEBOOK_REEL_WITH_IMAGE_COMMENT if images else FACEBOOK_REEL
+            return PublishStrategy("facebook_page", publish_type, "reel", "vertical_or_reel_video", endpoint_hint="reels", video_width=(probe.width if probe else 0), video_height=(probe.height if probe else 0), video_duration_seconds=(probe.duration_seconds if probe else 0.0))
         return PublishStrategy("facebook_page", FACEBOOK_VIDEO_POST, "feed_video", "product_video_ready", endpoint_hint="videos", video_width=(probe.width if probe else 0), video_height=(probe.height if probe else 0), video_duration_seconds=(probe.duration_seconds if probe else 0.0))
     if images:
         return PublishStrategy("facebook_page", FACEBOOK_PHOTO_POST, "feed_post", "product_images_ready", endpoint_hint="photos")

@@ -10,6 +10,7 @@ from affilipilot.config import DEFAULT_SECRET_PATH, load_env_file
 from affilipilot.publishing.facebook import FacebookConfig
 
 REQUIRED_PAGE_SCOPES = {"pages_manage_posts", "pages_read_engagement"}
+OPTIONAL_COMMENT_IMAGE_SCOPES = {"pages_manage_engagement"}
 
 
 @dataclass
@@ -95,6 +96,10 @@ def check_facebook_token(timeout: int = 30) -> FacebookTokenReport:
     report.app_id = str(data.get("app_id", ""))
     scope_set = set(report.scopes)
     report.missing_scopes = sorted(REQUIRED_PAGE_SCOPES - scope_set)
+    # Commenting images under a published video/reel is optional. Facebook may
+    # require pages_manage_engagement for Page comment creation; keep this out
+    # of the hard publish gate because primary post creation only needs the
+    # required scopes above.
 
     if values["page_id"] and values["page_access_token"]:
         probe_params = urllib.parse.urlencode({
@@ -119,6 +124,7 @@ def render_facebook_token_report(report: FacebookTokenReport) -> str:
         f"Token valid: {'yes' if report.valid else 'no'}",
         f"Scopes: {', '.join(report.scopes) if report.scopes else 'none/unknown'}",
         f"Missing required scopes: {', '.join(report.missing_scopes) if report.missing_scopes else 'none'}",
+        f"Supports image comments: {'yes' if OPTIONAL_COMMENT_IMAGE_SCOPES <= set(report.scopes) else 'no — missing ' + ', '.join(sorted(OPTIONAL_COMMENT_IMAGE_SCOPES - set(report.scopes)))}",
         f"Expires at: {report.expires_at if report.expires_at else 'unknown/never'}",
         f"Data access expires at: {report.data_access_expires_at if report.data_access_expires_at else 'unknown'}",
         f"Page probe: {'ok' if report.page_probe_ok else 'not ok'}",

@@ -30,7 +30,7 @@ log_file="$ROOT/logs/scheduled-e2e.log"
     --db data/affilipilot.db \
     --outbox "$outbox" \
     --discover-limit 80 \
-    --limit 1 \
+    --limit 3 \
     --real-accesstrade
   code=$?
   set -e
@@ -41,10 +41,9 @@ log_file="$ROOT/logs/scheduled-e2e.log"
   # outbox even when no publish-ready card is produced.
   if [[ -s "$outbox" ]]; then
     echo "===== $(date --iso-8601=seconds) batch=${batch} telegram_delivery_start outbox=${outbox} ====="
-    env PYTHONPATH=. /usr/bin/python3 -m affilipilot openclaw-telegram-send \
+    env PYTHONPATH=. /usr/bin/python3 -m affilipilot telegram-bot-send \
       --outbox "$outbox" \
-      --reply-channel telegram \
-      --reply-to 640968010 \
+      --secret-path /home/snail/.openclaw/workspace/secrets/affilipilot.env \
       --limit 5
     delivery_code=$?
     echo "===== $(date --iso-8601=seconds) batch=${batch} telegram_delivery_exit=${delivery_code} ====="

@@ -1,5 +1,7 @@
+from affilipilot.db import AffiliPilotDB
 from affilipilot.publishing.facebook import FacebookConfig
 from affilipilot.publishing.facebook_plan import build_graph_payload, plan_facebook_batch, render_facebook_plan, _publish_text
+from affilipilot.publishing.restrictions import get_platform_restriction
 from affilipilot.publishing.strategy import select_facebook_publish_strategy
 from affilipilot.workflows.approval import create_approval_batch, decide_post
 
@@ -97,3 +99,82 @@ def test_publish_text_falls_back_to_post_text_for_legacy_batches(tmp_path):
     post_file = tmp_path / "post.txt"
     post_file.write_text("Caption legacy trong file", encoding="utf-8")
     assert _publish_text({"files": {"post_text": str(post_file)}}) == "Caption legacy trong file"
+
+
+def test_facebook_plan_resolves_batch_relative_paths_from_other_cwd(tmp_path, monkeypatch):
+    project = tmp_path / "project"
+    data = project / "data"
+    db_path = data / "affilipilot.db"
+    media_dir = data / "runs" / "batch" / "drafts" / "media"
+    media_dir.mkdir(parents=True)
+    image = media_dir / "product.jpg"
+    # Minimal JPEG header is enough for this planner regression; media quality
+    # may warn/block for dimensions in other tests, but path existence must work.
+    image.write_bytes(b"\xff\xd8\xff\xe0" + b"0" * 100)
+    post_text = data / "runs" / "batch" / "drafts" / "post_1.post.txt"
+    post_text.parent.mkdir(parents=True, exist_ok=True)
+    post_text.write_text("Bài viết có chứa link tiếp thị liên kết. Hộp giấy treo tường giúp bàn ăn và bếp gọn hơn, tiện rút từng tờ khi lau tay hoặc xử lý vết đổ nhỏ trong ngày. #khangiay", encoding="utf-8")
+
+    db = AffiliPilotDB(db_path)
+    manifest = {"posts": [{
+        "post_id": "post_1",
+        "caption": "Bài viết có chứa link tiếp thị liên kết. Hộp giấy treo tường giúp bàn ăn và bếp gọn hơn, tiện rút từng tờ khi lau tay hoặc xử lý vết đổ nhỏ trong ngày. #khangiay",
+        "compliance": {"status": "pass"},
+        "product": {
+            "url": "https://shorten.asia/x",
+            "short_url": "https://shorten.asia/x",
+            "tracking_url": "https://shorten.asia/x",
+            "original_url": "https://shopee.vn/product/1/2",
+            "title": "Khăn giấy vệ sinh treo tường 1000 tờ",
+            "category": "home_consumable",
+            "image_path": str(image.relative_to(project)),
+            "image_url": "https://down-vn.img.susercontent.com/file/product",
+            "media_source": "shopee_pdp",
+            "media_confidence": "high",
+        },
+        "media": {"source": "shopee_pdp", "confidence": "high"},
+        "files": {
+            "post_text": str(post_text.relative_to(project)),
+            "image": str(image.relative_to(project)),
+            "images": [str(image.relative_to(project))],
+        },
+    }]}
+    db.save_batch("batch", "test", manifest)
+    db.set_decision("batch", "post_1", "approved")
+
+    other_cwd = tmp_path / "other"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+    plan = plan_facebook_batch(db_path, batch_key="batch", out_path=tmp_path / "plan.json", config=FacebookConfig(page_id="page", page_access_token="token"))
+
+    assert "missing_post_text" not in plan.plans[0].reasons
+    assert "media_path_not_found:image_path" not in plan.plans[0].reasons
+    assert "media_quality_missing_local_image" not in plan.plans[0].reasons
+
+
+def test_reel_with_images_selects_comment_strategy(tmp_path):
+    image = tmp_path / "p.jpg"
+    image.write_bytes(b"img")
+    video = tmp_path / "reel.mp4"
+    video.write_bytes(b"video")
+
+    strategy = select_facebook_publish_strategy({
+        "files": {"video": str(video), "images": [str(image)]},
+        "product": {"url": "https://example.com", "video_kind": "vertical reel"},
+    })
+    assert strategy.publish_type == "reel_with_image_comment"
+
+    graph = build_graph_payload(
+        page_id="page",
+        message="caption",
+        link="https://shorten.asia/x",
+        image_paths=[str(image)],
+        video_path=str(video),
+        publish_type=strategy.publish_type,
+    )
+    assert graph["endpoint"] == "/page/video_reels"
+    assert graph["strategy"] == "reel_primary_with_image_comment"
+
+    restriction = get_platform_restriction("facebook_page", publish_type=strategy.publish_type)
+    assert restriction.video_required is True
+    assert restriction.image_min_count == 1

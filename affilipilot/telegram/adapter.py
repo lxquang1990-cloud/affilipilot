@@ -88,6 +88,62 @@ def _write_inbound_links(work_dir: Path, body: str, batch_key: str) -> Path:
     path.write_text(body.strip() + "\n", encoding="utf-8")
     return path
 
+def _outbox_has_message(outbox_path: Path, batch_key: str, post_id: str) -> bool:
+    if not outbox_path.exists():
+        return False
+    needle = f'"id": "{batch_key}:{post_id}"'
+    try:
+        return needle in outbox_path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+
+def _resolve_publish_dir(config: AdapterConfig, batch_key: str) -> Path:
+    """Resolve approval-triggered publish artifacts to a batch-scoped directory.
+
+    The Telegram bot may pass a shared publish directory such as
+    data/publish/telegram. Writing every approval-triggered facebook-plan.json to
+    that shared directory makes later quick replies susceptible to stale or
+    cross-batch plan/context. Keep artifacts under <publish_dir>/<batch_key>
+    unless the caller already supplied a batch-specific directory.
+    """
+    base = config.publish_dir or (config.work_dir / "publish")
+    base = base.expanduser()
+    if base.name == batch_key:
+        return base
+    return base / batch_key
+
+
+def _resolve_delivery_outbox(config: AdapterConfig, batch_key: str, post_id: str) -> Path | None:
+    """Resolve the concrete outbox file for delivery proof.
+
+    Scheduled E2E runs write one file per batch under data/outbox/<batch>.json,
+    while older adapter invocations may pass a generic outbox path. Quick replies
+    can approve a DB batch successfully but auto-publish must mark the exact
+    delivered approval card, so prefer a batch-specific file when available.
+    """
+    candidates: list[Path] = []
+    if config.outbox_path:
+        candidates.append(config.outbox_path)
+        if config.outbox_path.is_dir():
+            candidates.append(config.outbox_path / f"{batch_key}.json")
+        else:
+            candidates.append(config.outbox_path.parent / f"{batch_key}.json")
+    candidates.extend([
+        config.work_dir / "outbox" / f"{batch_key}.json",
+        config.work_dir / "data" / "outbox" / f"{batch_key}.json",
+        config.db_path.parent / "outbox" / f"{batch_key}.json",
+        Path("data/outbox") / f"{batch_key}.json",
+    ])
+    seen: set[Path] = set()
+    for candidate in candidates:
+        candidate = candidate.expanduser()
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if _outbox_has_message(candidate, batch_key, post_id):
+            return candidate
+    return config.outbox_path
+
 
 def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
     command = parse_telegram_text(text)
@@ -131,7 +187,7 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
         if not batch_key:
             return AdapterResult(command.intent, "No batch found yet.", [])
         outbox_path = config.outbox_path or (config.work_dir / "outbox.json")
-        out_dir = config.publish_dir or (config.work_dir / "publish" / batch_key)
+        out_dir = _resolve_publish_dir(config, batch_key)
         status = build_campaign_status(db_path=config.db_path, batch_key=batch_key, outbox_path=outbox_path, out_dir=out_dir)
         return AdapterResult(command.intent, render_campaign_status(status), [])
 
@@ -142,7 +198,7 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
         if not batch_key:
             return AdapterResult(command.intent, "No batch found yet.", [])
         outbox_path = config.outbox_path or (config.work_dir / "outbox.json")
-        plan_path = (config.publish_dir or (config.work_dir / "publish" / batch_key)) / "facebook-plan.json"
+        plan_path = _resolve_publish_dir(config, batch_key) / "facebook-plan.json"
         result = recommend_next_action(db_path=config.db_path, batch_key=batch_key, outbox_path=outbox_path, plan_path=plan_path)
         return AdapterResult(command.intent, render_next_action(result), [])
 
@@ -196,17 +252,18 @@ def handle_text_message(text: str, config: AdapterConfig) -> AdapterResult:
             return AdapterResult(command.intent, f"⚠️ Approval not found: {batch_key}/{post_id}. Use the exact command from the approval card.", [])
         status_text = render_status(config.db_path, batch_key=batch_key)
         if command.intent == TelegramIntent.APPROVE and config.auto_publish_on_approve:
-            if not config.outbox_path:
+            delivery_outbox = _resolve_delivery_outbox(config, batch_key, post_id)
+            if not delivery_outbox:
                 return AdapterResult(command.intent, status_text + "\n\n⚠️ Auto-publish skipped: missing outbox path for delivery proof.", [])
             receipt = config.approval_receipt or f"local-approval:{batch_key}:{post_id}"
             try:
-                mark_batch_delivered(config.outbox_path, batch_key=batch_key, post_id=post_id, receipt=receipt)
+                mark_batch_delivered(delivery_outbox, batch_key=batch_key, post_id=post_id, receipt=receipt)
                 publish_result = publish_after_approval(
                     db_path=config.db_path,
                     batch_key=batch_key,
                     post_id=post_id,
-                    outbox_path=config.outbox_path,
-                    out_dir=config.publish_dir or (config.work_dir / "publish" / batch_key),
+                    outbox_path=delivery_outbox,
+                    out_dir=_resolve_publish_dir(config, batch_key),
                     publisher=dispatch_publish_strategy,
                 )
                 status_text += "\n\n" + render_publish_after_approval(publish_result)

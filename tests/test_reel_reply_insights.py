@@ -11,11 +11,11 @@ def test_dispatch_uses_reel_publisher(monkeypatch, tmp_path):
 
     def fake_reel(**kwargs):
         called.update(kwargs)
-        return {"ok": True, "status": 200, "response": {"id": "fb_reel_1"}, "endpoint": "/page/reels"}
+        return {"ok": True, "status": 200, "response": {"id": "fb_reel_1"}, "endpoint": "/page/video_reels"}
 
     monkeypatch.setattr("affilipilot.publishing.dispatch.publish_reel_post", fake_reel)
     result = dispatch_publish_strategy(
-        {"endpoint": "/page/reels"},
+        {"endpoint": "/page/video_reels"},
         {"strategy": "reel_primary", "description": "caption", "local_video_path": str(tmp_path / "v.mp4"), "url": "https://shorten.asia/x"},
     )
     assert result["ok"] is True
@@ -69,3 +69,57 @@ def test_scheduled_insights_sync_uses_published_tasks(monkeypatch, tmp_path):
     rows = AffiliPilotDB(db).connect().execute("SELECT publish_type, metrics_profile FROM social_metrics").fetchall()
     assert rows[0]["publish_type"] == "reel"
     assert rows[0]["metrics_profile"] == "reel"
+
+
+def test_reel_upload_phase_error_falls_back_to_video_post(monkeypatch, tmp_path):
+    from affilipilot.publishing import dispatch
+
+    def fake_reel(**kwargs):
+        return {
+            "ok": False,
+            "status": 400,
+            "response": {"error": {"code": 100, "message": "(#100) The parameter upload_phase is required."}},
+        }
+
+    def fake_video(**kwargs):
+        return {"ok": True, "status": 200, "response": {"id": "video_1"}, "endpoint": "/page/videos"}
+
+    monkeypatch.setattr(dispatch, "publish_reel_post", fake_reel)
+    monkeypatch.setattr(dispatch, "publish_video_post", fake_video)
+
+    result = dispatch.dispatch_publish_strategy(
+        {"endpoint": "/page/video_reels"},
+        {"strategy": "reel_primary", "description": "caption", "local_video_path": str(tmp_path / "v.mp4"), "url": "https://shorten.asia/x"},
+    )
+
+    assert result["ok"] is True
+    assert result["fallback_from"] == "video_reels"
+    assert result["fallback_reason"] == "facebook_reels_upload_flow_unavailable"
+
+
+def test_reel_comment_image_failure_keeps_primary_publish_ok(monkeypatch, tmp_path):
+    from affilipilot.publishing import dispatch
+
+    def fake_reel(**kwargs):
+        return {"ok": True, "status": 200, "response": {"id": "reel_1"}}
+
+    def fake_comments(**kwargs):
+        return {"ok": False, "status": 403, "results": []}
+
+    monkeypatch.setattr(dispatch, "publish_reel_post", fake_reel)
+    monkeypatch.setattr(dispatch, "publish_gallery_comment", fake_comments)
+
+    result = dispatch.dispatch_publish_strategy(
+        {"endpoint": "/page/video_reels"},
+        {
+            "strategy": "reel_primary_with_image_comment",
+            "description": "caption",
+            "local_video_path": str(tmp_path / "v.mp4"),
+            "url": "https://shorten.asia/x",
+            "local_image_paths": [str(tmp_path / "p.jpg")],
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["status_detail"] == "published_with_image_comment_warning"
+    assert "image_comment_failed" in result["warnings"]
